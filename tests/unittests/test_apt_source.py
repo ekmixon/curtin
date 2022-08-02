@@ -47,7 +47,7 @@ def load_tfile(filename):
     try:
         content = util.load_file(filename, decode=True)
     except Exception as error:
-        print('failed to load file content for test: %s' % error)
+        print(f'failed to load file content for test: {error}')
         raise
 
     return content
@@ -103,8 +103,7 @@ class TestAptSourceConfig(CiTestCase):
         """ get_default_params
         Get the most basic default mrror and release info to be used in tests
         """
-        params = {}
-        params['RELEASE'] = distro.lsb_release()['codename']
+        params = {'RELEASE': distro.lsb_release()['codename']}
         arch = distro.get_architecture()
         params['MIRROR'] = apt_config.get_default_mirrors(arch)["PRIMARY"]
         return params
@@ -242,10 +241,11 @@ class TestAptSourceConfig(CiTestCase):
                                   aa_repo_match=self.matcher)
 
         # check if it added the right ammount of keys
-        calls = []
-        for _ in range(keynum):
-            calls.append(call(['apt-key', 'add', '-'], data=b'fakekey 1234',
-                              target=TARGET))
+        calls = [
+            call(['apt-key', 'add', '-'], data=b'fakekey 1234', target=TARGET)
+            for _ in range(keynum)
+        ]
+
         mockobj.assert_has_calls(calls, any_order=True)
 
         self.assertTrue(os.path.isfile(filename))
@@ -483,25 +483,34 @@ class TestAptSourceConfig(CiTestCase):
         component = "ubuntu-ports"
         archive = "ports.ubuntu.com"
 
-        cfg = {'primary': [{'arches': ["default"],
-                            'uri':
-                            'http://test.ubuntu.com/%s/' % component}],
-               'security': [{'arches': ["default"],
-                             'uri':
-                             'http://testsec.ubuntu.com/%s/' % component}]}
-        post = ("%s_dists_%s-updates_InRelease" %
-                (component, distro.lsb_release()['codename']))
-        fromfn = ("%s/%s_%s" % (pre, archive, post))
-        tofn = ("%s/test.ubuntu.com_%s" % (pre, post))
+        cfg = {
+            'primary': [
+                {
+                    'arches': ["default"],
+                    'uri': f'http://test.ubuntu.com/{component}/',
+                }
+            ],
+            'security': [
+                {
+                    'arches': ["default"],
+                    'uri': f'http://testsec.ubuntu.com/{component}/',
+                }
+            ],
+        }
+
+        post = f"{component}_dists_{distro.lsb_release()['codename']}-updates_InRelease"
+
+        fromfn = f"{pre}/{archive}_{post}"
+        tofn = f"{pre}/test.ubuntu.com_{post}"
 
         mirrors = apt_config.find_apt_mirror_info(cfg, arch)
 
-        self.assertEqual(mirrors['MIRROR'],
-                         "http://test.ubuntu.com/%s/" % component)
-        self.assertEqual(mirrors['PRIMARY'],
-                         "http://test.ubuntu.com/%s/" % component)
-        self.assertEqual(mirrors['SECURITY'],
-                         "http://testsec.ubuntu.com/%s/" % component)
+        self.assertEqual(mirrors['MIRROR'], f"http://test.ubuntu.com/{component}/")
+        self.assertEqual(mirrors['PRIMARY'], f"http://test.ubuntu.com/{component}/")
+        self.assertEqual(
+            mirrors['SECURITY'], f"http://testsec.ubuntu.com/{component}/"
+        )
+
 
         with mock.patch.object(os, 'rename') as mockren:
             with mock.patch.object(glob, 'glob',
@@ -513,13 +522,13 @@ class TestAptSourceConfig(CiTestCase):
     @mock.patch("curtin.commands.apt_config.distro.get_architecture")
     def test_mir_apt_list_rename_non_slash(self, m_get_architecture):
         target = os.path.join(self.tmp, "rename_non_slash")
-        apt_lists_d = os.path.join(target, "./" + apt_config.APT_LISTS)
+        apt_lists_d = os.path.join(target, f"./{apt_config.APT_LISTS}")
 
         m_get_architecture.return_value = 'amd64'
 
         mirror_path = "some/random/path/"
-        primary = "http://test.ubuntu.com/" + mirror_path
-        security = "http://test-security.ubuntu.com/" + mirror_path
+        primary = f"http://test.ubuntu.com/{mirror_path}"
+        security = f"http://test-security.ubuntu.com/{mirror_path}"
         mirrors = {'PRIMARY': primary, 'SECURITY': security}
 
         # these match default archive prefixes
@@ -1190,7 +1199,7 @@ class TestDebconfSelections(CiTestCase):
         self.assertEqual(m_dpkg_r.call_count, 1)
         # assumes called with *args (dpkg_reconfigure([a,b,c], target=))
         packages = m_dpkg_r.call_args_list[0][0][0]
-        self.assertEqual(set(['cloud-init', 'pkgb']), set(packages))
+        self.assertEqual({'cloud-init', 'pkgb'}, set(packages))
 
     @mock.patch("curtin.commands.apt_config.dpkg_reconfigure")
     @mock.patch("curtin.commands.apt_config.debconf_set_selections")

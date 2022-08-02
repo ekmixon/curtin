@@ -21,11 +21,7 @@ CMD_ARGUMENTS = (
 
 
 def pack_main(args):
-    if args.output == "-":
-        fdout = sys.stdout
-    else:
-        fdout = open(args.output, "w")
-
+    fdout = sys.stdout if args.output == "-" else open(args.output, "w")
     delim = ":"
     addl = []
     for tok in args.add:

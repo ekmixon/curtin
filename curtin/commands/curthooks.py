@@ -104,8 +104,8 @@ def disable_overlayroot(cfg, target):
     disable = cfg.get('disable_overlayroot', True)
     local_conf = os.path.sep.join([target, 'etc/overlayroot.local.conf'])
     if disable and os.path.exists(local_conf):
-        LOG.debug("renaming %s to %s", local_conf, local_conf + ".old")
-        shutil.move(local_conf, local_conf + ".old")
+        LOG.debug("renaming %s to %s", local_conf, f"{local_conf}.old")
+        shutil.move(local_conf, f"{local_conf}.old")
 
 
 def _update_initramfs_tools(machine=None):
@@ -128,10 +128,9 @@ def disable_update_initramfs(cfg, target, machine=None):
     """ Find update-initramfs tools in target and change their name. """
     with util.ChrootableTarget(target) as in_chroot:
         for tool in _update_initramfs_tools(machine=machine):
-            found = util.which(tool, target=target)
-            if found:
+            if found := util.which(tool, target=target):
                 LOG.debug('Diverting original %s in target.', tool)
-                rename = found + '.curtin-disabled'
+                rename = f'{found}.curtin-disabled'
                 divert = ['dpkg-divert', '--add', '--rename',
                           '--divert', rename, found]
                 in_chroot.subp(divert)
@@ -182,7 +181,7 @@ def setup_zipl(cfg, target):
     root_arg = get_volume_spec(target_dev)
 
     if not root_arg:
-        msg = "Failed to identify root= for %s at %s." % (target, target_dev)
+        msg = f"Failed to identify root= for {target} at {target_dev}."
         LOG.warn(msg)
         raise ValueError(msg)
 
@@ -262,8 +261,7 @@ def chzdev_import(data=None, persistent=True, noroot=True, base=None,
         cmd.extend(['--no-root-update'])
     if base:
         if type(base) == dict:
-            cmd.extend(
-                ['--base'] + ["%s=%s" % (k, v) for k, v in base.items()])
+            cmd.extend(['--base'] + [f"{k}={v}" for k, v in base.items()])
         else:
             cmd.extend(['--base', base])
 
@@ -357,11 +355,7 @@ def install_kernel(cfg, target):
     mapping = copy.deepcopy(KERNEL_MAPPING)
     config.merge_config(mapping, kernel_cfg.get('mapping', {}))
 
-    # Machines using flash-kernel may need additional dependencies installed
-    # before running. Run those checks in the ephemeral environment so the
-    # target only has required packages installed.  See LP:1640519
-    fk_packages = get_flash_kernel_pkgs()
-    if fk_packages:
+    if fk_packages := get_flash_kernel_pkgs():
         distro.install_packages(fk_packages.split(), target=target)
 
     if kernel_package:
@@ -394,15 +388,15 @@ def install_kernel(cfg, target):
         else:
             LOG.debug("installing kernel package '%s'", package)
             distro.install_packages([package], target=target)
+    elif kernel_fallback is None:
+        LOG.warn("Kernel package '%s' not available and no fallback."
+                 " System may not boot.", package)
+
     else:
-        if kernel_fallback is not None:
-            LOG.info("Kernel package '%s' not available.  "
-                     "Installing fallback package '%s'.",
-                     package, kernel_fallback)
-            distro.install_packages([kernel_fallback], target=target)
-        else:
-            LOG.warn("Kernel package '%s' not available and no fallback."
-                     " System may not boot.", package)
+        LOG.info("Kernel package '%s' not available.  "
+                 "Installing fallback package '%s'.",
+                 package, kernel_fallback)
+        distro.install_packages([kernel_fallback], target=target)
 
 
 def uefi_remove_old_loaders(grubcfg, target):
@@ -421,7 +415,7 @@ def uefi_remove_old_loaders(grubcfg, target):
         if remove_old_loaders:
             with util.ChrootableTarget(target) as in_chroot:
                 for entry, info in old_efi_entries.items():
-                    LOG.debug("removing old UEFI entry: %s" % info['name'])
+                    LOG.debug(f"removing old UEFI entry: {info['name']}")
                     in_chroot.subp(
                         ['efibootmgr', '-B', '-b', entry], capture=True)
         else:
@@ -469,19 +463,17 @@ def _reorder_new_entry(boot_order, efi_output, efi_orig=None, variant=None):
 
     LOG.debug("UEFI previous boot order: %s", efi_orig['order'])
     LOG.debug("UEFI current  boot order: %s", boot_order)
-    new_entries = list(set(boot_order).difference(set(efi_orig['order'])))
-    if new_entries:
+    if new_entries := list(set(boot_order).difference(set(efi_orig['order']))):
         LOG.debug("UEFI Found new boot entries: %s", new_entries)
     LOG.debug('UEFI Looking for installed entry variant=%s', variant.lower())
     for bootnum in boot_order:
         entry = efi_output['entries'][bootnum]
         if uefi_boot_entry_is_network(entry['name']):
             net_boot.append(bootnum)
+        elif entry['name'].lower() == variant.lower():
+            target.append(bootnum)
         else:
-            if entry['name'].lower() == variant.lower():
-                target.append(bootnum)
-            else:
-                other.append(bootnum)
+            other.append(bootnum)
 
     if net_boot:
         LOG.debug("UEFI found netboot entries: %s", net_boot)
@@ -530,7 +522,7 @@ def uefi_reorder_loaders(grubcfg, target, efi_orig=None, variant=None):
             reason = (
                 "config 'reorder_uefi_force_fallback' is True" if
                 force_fallback_reorder else "missing 'BootCurrent' value")
-            LOG.debug("Using fallback UEFI reordering: " + reason)
+            LOG.debug(f"Using fallback UEFI reordering: {reason}")
             if len(boot_order) < 2:
                 LOG.debug(
                     'UEFI BootOrder has less than 2 entries, cannot reorder')
@@ -565,8 +557,7 @@ def uefi_remove_duplicate_entries(grubcfg, target, to_remove=None):
             for bootnum, entry in to_remove:
                 LOG.debug('Removing duplicate EFI entry (%s, %s)',
                           bootnum, entry)
-                in_chroot.subp(['efibootmgr', '--bootnum=%s' % bootnum,
-                                '--delete-bootnum'])
+                in_chroot.subp(['efibootmgr', f'--bootnum={bootnum}', '--delete-bootnum'])
 
 
 def uefi_find_duplicate_entries(grubcfg, target, efi_output=None):
@@ -735,7 +726,7 @@ def setup_grub(cfg, target, osfamily=DISTROS.debian, variant=None):
                 storage_grub_devices.append(
                     get_path_to_storage_volume(item_id, storage_cfg_odict))
 
-        if len(storage_grub_devices) > 0:
+        if storage_grub_devices:
             if len(grubcfg.get('install_devices', [])):
                 LOG.warn("Storage Config grub device config takes precedence "
                          "over grub 'install_devices' value, ignoring: %s",
@@ -847,11 +838,11 @@ def update_initramfs(target=None, all_kernels=False):
     # update-initramfs's -u (update) method.  If the file does
     # not exist, then we need to run the -c (create) method.
     boot = paths.target_path(target, 'boot')
-    for kernel in sorted(glob.glob(boot + '/vmlinu*-*')):
+    for kernel in sorted(glob.glob(f'{boot}/vmlinu*-*')):
         kfile = os.path.basename(kernel)
         # handle vmlinux or vmlinuz
         kprefix = kfile.split('-')[0]
-        version = kfile.replace(kprefix + '-', '')
+        version = kfile.replace(f'{kprefix}-', '')
         initrd = kernel.replace(kprefix, 'initrd.img')
         # -u == update, -c == create
         mode = '-u' if os.path.exists(initrd) else '-c'
@@ -859,7 +850,7 @@ def update_initramfs(target=None, all_kernels=False):
         with util.ChrootableTarget(target) as in_chroot:
             in_chroot.subp(cmd)
             if not os.path.exists(initrd):
-                files = os.listdir(target + '/boot')
+                files = os.listdir(f'{target}/boot')
                 LOG.debug('Failed to find initrd %s', initrd)
                 LOG.debug('Files in target /boot: %s', files)
 
@@ -983,12 +974,13 @@ def restore_dist_interfaces(cfg, target):
         return
 
     rp = os.path.realpath(eni)
-    if (os.path.exists(eni + ".dist") and
-            (rp.startswith("/run") or rp.startswith(target + "/run"))):
+    if os.path.exists(f"{eni}.dist") and (
+        rp.startswith("/run") or rp.startswith(f"{target}/run")
+    ):
 
         LOG.debug("restoring dist interfaces, existing link pointed to /run")
-        shutil.move(eni, eni + ".old")
-        shutil.move(eni + ".dist", eni)
+        shutil.move(eni, f"{eni}.old")
+        shutil.move(f"{eni}.dist", eni)
 
 
 def add_swap(cfg, target, fstab):
@@ -1023,8 +1015,7 @@ def detect_and_handle_multipath(cfg, target, osfamily=DISTROS.debian):
         DISTROS.redhat: ['device-mapper-multipath'],
     }
     if osfamily not in DEFAULT_MULTIPATH_PACKAGES:
-        raise ValueError(
-                'No multipath package mapping for distro: %s' % osfamily)
+        raise ValueError(f'No multipath package mapping for distro: {osfamily}')
 
     mpcfg = cfg.get('multipath', {})
     mpmode = mpcfg.get('mode', 'auto')
@@ -1044,9 +1035,11 @@ def detect_and_handle_multipath(cfg, target, osfamily=DISTROS.debian):
         return
 
     LOG.info("Detected multipath device. Installing support via %s", mppkgs)
-    needed = [pkg for pkg in mppkgs if pkg
-              not in distro.get_installed_packages(target)]
-    if needed:
+    if needed := [
+        pkg
+        for pkg in mppkgs
+        if pkg not in distro.get_installed_packages(target)
+    ]:
         distro.install_packages(needed, target=target, osfamily=osfamily)
 
     replace_spaces = True
@@ -1098,15 +1091,14 @@ def detect_and_handle_multipath(cfg, target, osfamily=DISTROS.debian):
                 LOG.warning('Failed to determine multipath device name, using'
                             ' fallback name "mpatha".')
                 mpname = 'mpatha'
-        grub_dev = "/dev/mapper/" + mpname
+        grub_dev = f"/dev/mapper/{mpname}"
         if partno is not None:
             if osfamily == DISTROS.debian:
-                grub_dev += "-part%s" % partno
+                grub_dev += f"-part{partno}"
             elif osfamily == DISTROS.redhat:
-                grub_dev += "p%s" % partno
+                grub_dev += f"p{partno}"
             else:
-                raise ValueError(
-                        'Unknown grub_dev mapping for distro: %s' % osfamily)
+                raise ValueError(f'Unknown grub_dev mapping for distro: {osfamily}')
 
         LOG.debug("configuring multipath for root=%s wwid=%s mpname=%s",
                   grub_dev, wwid, mpname)
@@ -1124,12 +1116,17 @@ def detect_and_handle_multipath(cfg, target, osfamily=DISTROS.debian):
                 mpath_id, mpath_part_num = mpname.split("-part")
             else:
                 mpath_id = mpname
-            multipath_bind_content = '\n'.join([
-                ('# This file was created by curtin while '
-                 'installing the system.'), "%s %s" % (mpath_id, wwid),
-                '# End of content generated by curtin.',
-                '# Everything below is maintained by multipath subsystem.',
-                ''])
+            multipath_bind_content = '\n'.join(
+                [
+                    '# This file was created by curtin while '
+                    'installing the system.',
+                    f"{mpath_id} {wwid}",
+                    '# End of content generated by curtin.',
+                    '# Everything below is maintained by multipath subsystem.',
+                    '',
+                ]
+            )
+
             util.write_file(multipath_bind_path,
                             content=multipath_bind_content)
 
@@ -1141,8 +1138,7 @@ def detect_and_handle_multipath(cfg, target, osfamily=DISTROS.debian):
             grub_cfg = os.path.sep.join([target, '/etc/default/grub'])
             omode = 'a'
         else:
-            raise ValueError(
-                    'Unknown grub_cfg mapping for distro: %s' % osfamily)
+            raise ValueError(f'Unknown grub_cfg mapping for distro: {osfamily}')
 
         if mp_supported:
             # if root is on lvm, emit a multipath filter to lvm
@@ -1155,11 +1151,11 @@ def detect_and_handle_multipath(cfg, target, osfamily=DISTROS.debian):
                 indent + lvmfilter])
             lvmconf = paths.target_path(target, '/etc/lvm/lvm.conf')
             orig_content = util.load_file(lvmconf)
-            devices_match = re.search(r'devices\ {',
-                                      orig_content, re.MULTILINE)
-            if devices_match:
+            if devices_match := re.search(
+                r'devices\ {', orig_content, re.MULTILINE
+            ):
                 LOG.debug('Adding multipath filter (%s) to lvm.conf', mpfilter)
-                shutil.move(lvmconf, lvmconf + '.orig-curtin')
+                shutil.move(lvmconf, f'{lvmconf}.orig-curtin')
                 index = devices_match.end()
                 new_content = (
                     orig_content[:index] + '\n' + mpfilter + '\n' +
@@ -1167,12 +1163,15 @@ def detect_and_handle_multipath(cfg, target, osfamily=DISTROS.debian):
                 util.write_file(lvmconf, new_content)
         else:
             # TODO: fix up dnames without multipath available on host
-            msg = '\n'.join([
-                '# Written by curtin for multipath device %s %s' % (mpname,
-                                                                    wwid),
-                'GRUB_DEVICE=%s' % grub_dev,
-                'GRUB_DISABLE_LINUX_UUID=true',
-                ''])
+            msg = '\n'.join(
+                [
+                    f'# Written by curtin for multipath device {mpname} {wwid}',
+                    f'GRUB_DEVICE={grub_dev}',
+                    'GRUB_DISABLE_LINUX_UUID=true',
+                    '',
+                ]
+            )
+
             util.write_file(grub_cfg, omode=omode, content=msg)
 
     else:
@@ -1194,8 +1193,7 @@ def detect_and_handle_multipath(cfg, target, osfamily=DISTROS.debian):
             ''])
         util.write_file(dracut_conf_multipath, content=msg)
     else:
-        raise ValueError(
-                'Unknown initramfs mapping for distro: %s' % osfamily)
+        raise ValueError(f'Unknown initramfs mapping for distro: {osfamily}')
 
 
 def detect_required_packages(cfg, osfamily=DISTROS.debian):
@@ -1242,18 +1240,20 @@ def install_missing_packages(cfg, target, osfamily=DISTROS.debian):
      }
     '''
     installed_packages = distro.get_installed_packages(target)
-    needed_packages = set([pkg for pkg in
-                           detect_required_packages(cfg, osfamily=osfamily)
-                           if pkg not in installed_packages])
+    needed_packages = {
+        pkg
+        for pkg in detect_required_packages(cfg, osfamily=osfamily)
+        if pkg not in installed_packages
+    }
+
 
     arch_packages = {
         's390x': [('s390-tools', 'zipl')],
     }
 
     for pkg, cmd in arch_packages.get(platform.machine(), []):
-        if not util.which(cmd, target=target):
-            if pkg not in needed_packages:
-                needed_packages.add(pkg)
+        if not util.which(cmd, target=target) and pkg not in needed_packages:
+            needed_packages.add(pkg)
 
     # UEFI requires grub-efi-{arch}. If a signed version of that package
     # exists then it will be installed.
@@ -1271,7 +1271,7 @@ def install_missing_packages(cfg, target, osfamily=DISTROS.debian):
                     # unsigned grub so the install doesn't require Internet
                     # access. If grub is missing use to signed version.
                     uefi_pkgs.extend(['grub2-efi-x64', 'shim-x64'])
-            if arch == 'arm64':
+            elif arch == 'arm64':
                 if 'grub2-efi-aa64-modules' not in installed_packages:
                     # Packages required for arm64 grub installer
                     uefi_pkgs.extend(['grub2-efi-aa64-modules',
@@ -1280,10 +1280,10 @@ def install_missing_packages(cfg, target, osfamily=DISTROS.debian):
             arch = distro.get_architecture()
             if arch == 'i386':
                 arch = 'ia32'
-            uefi_pkgs.append('grub-efi-%s' % arch)
+            uefi_pkgs.append(f'grub-efi-{arch}')
 
             # Architecture might support a signed UEFI loader
-            uefi_pkg_signed = 'grub-efi-%s-signed' % arch
+            uefi_pkg_signed = f'grub-efi-{arch}-signed'
             if distro.has_pkg_available(uefi_pkg_signed):
                 uefi_pkgs.append(uefi_pkg_signed)
 
@@ -1292,8 +1292,7 @@ def install_missing_packages(cfg, target, osfamily=DISTROS.debian):
             if distro.has_pkg_available("shim-signed"):
                 uefi_pkgs.append("shim-signed")
         else:
-            raise ValueError('Unknown grub2 package list for distro: %s' %
-                             osfamily)
+            raise ValueError(f'Unknown grub2 package list for distro: {osfamily}')
         needed_packages.update([pkg for pkg in uefi_pkgs
                                 if pkg not in installed_packages])
 
@@ -1301,7 +1300,7 @@ def install_missing_packages(cfg, target, osfamily=DISTROS.debian):
     has_netplan = ('nplan' in installed_packages or
                    'netplan.io' in installed_packages)
     if 'ifupdown' not in installed_packages and has_netplan:
-        drops = set(['bridge-utils', 'ifenslave', 'vlan'])
+        drops = {'bridge-utils', 'ifenslave', 'vlan'}
         if needed_packages.union(drops):
             LOG.debug("Skipping install of %s.  Not needed on netplan system.",
                       needed_packages.union(drops))
@@ -1349,8 +1348,16 @@ def inject_pollinate_user_agent_config(ua_cfg, target):
 
     pollinate_cfg = paths.target_path(target, '/etc/pollinate/add-user-agent')
     comment = "# written by curtin"
-    content = "\n".join(["%s/%s %s" % (ua_key, ua_val, comment)
-                         for ua_key, ua_val in ua_cfg.items()]) + "\n"
+    content = (
+        "\n".join(
+            [
+                f"{ua_key}/{ua_val} {comment}"
+                for ua_key, ua_val in ua_cfg.items()
+            ]
+        )
+        + "\n"
+    )
+
     util.write_file(pollinate_cfg, content=content)
 
 
@@ -1384,14 +1391,9 @@ def handle_pollinate_user_agent(cfg, target):
     # set curtin version
     uacfg['curtin'] = curtin_version.version_string()
 
-    # maas configures a curtin reporting webhook handler with
-    # an endpoint URL.  This url is used to query the MAAS REST
-    # api to extract the exact maas version.
-    maas_reporting = cfg.get('reporting', {}).get('maas', None)
-    if maas_reporting:
+    if maas_reporting := cfg.get('reporting', {}).get('maas', None):
         endpoint = maas_reporting.get('endpoint')
-        maas_version = get_maas_version(endpoint)
-        if maas_version:
+        if maas_version := get_maas_version(endpoint):
             uacfg['maas'] = maas_version['version']
 
     inject_pollinate_user_agent_config(uacfg, target)
@@ -1427,8 +1429,7 @@ def configure_iscsi(cfg, state_etcd, target, osfamily=DISTROS.debian):
     elif osfamily == DISTROS.debian:
         copy_iscsi_conf(nodes, target)
     else:
-        raise ValueError(
-                'Unknown iscsi requirements for distro: %s' % osfamily)
+        raise ValueError(f'Unknown iscsi requirements for distro: {osfamily}')
 
 
 def configure_mdadm(cfg, state_etcd, target, osfamily=DISTROS.debian):
@@ -1443,8 +1444,7 @@ def configure_mdadm(cfg, state_etcd, target, osfamily=DISTROS.debian):
         DISTROS.redhat: 'etc/mdadm.conf',
     }
     if osfamily not in conf_map:
-        raise ValueError(
-                'Unknown mdadm conf mapping for distro: %s' % osfamily)
+        raise ValueError(f'Unknown mdadm conf mapping for distro: {osfamily}')
     LOG.info('Mdadm configuration found, enabling service')
     shutil.copy(mdadm_location, paths.target_path(target,
                                                   conf_map[osfamily]))
@@ -1486,7 +1486,7 @@ def handle_cloudconfig(cfg, base_dir=None):
     #   generate a path based on item key
     #   if path is already in the item, LOG warning, and use generated path
     for cfgname, cfgvalue in cfg.items():
-        cfgpath = "50-cloudconfig-%s.cfg" % cfgname
+        cfgpath = f"50-cloudconfig-{cfgname}.cfg"
         if 'path' in cfgvalue:
             LOG.warning("cloudconfig ignoring 'path' key in config")
         cfgvalue['path'] = cfgpath
@@ -1511,8 +1511,7 @@ def ubuntu_core_curthooks(cfg, target=None):
         cc_target = os.path.join(ubuntu_core_target, 'data', 'etc',
                                  'cloud', 'cloud.cfg.d')
 
-    cloudconfig = cfg.get('cloudconfig', None)
-    if cloudconfig:
+    if cloudconfig := cfg.get('cloudconfig', None):
         # remove cloud-init.disabled, if found
         cloudinit_disable = os.path.join(ubuntu_core_target,
                                          'etc/cloud/cloud-init.disabled')
@@ -1521,8 +1520,7 @@ def ubuntu_core_curthooks(cfg, target=None):
 
         handle_cloudconfig(cloudconfig, base_dir=cc_target)
 
-    netconfig = cfg.get('network', None)
-    if netconfig:
+    if netconfig := cfg.get('network', None):
         LOG.info('Writing network configuration')
         ubuntu_core_netconfig = os.path.join(cc_target,
                                              "50-curtin-networking.cfg")
@@ -1642,11 +1640,12 @@ def redhat_update_dracut_config(target, cfg):
             add_conf.add(initramfs_mapping['lvm']['conf'])
             add_modules.add(initramfs_mapping['lvm']['modules'])
 
-    dconfig = ['# Written by curtin for custom storage config']
-    dconfig.append('add_dracutmodules+=" %s"' % (" ".join(add_modules)))
-    for conf in add_conf:
-        dconfig.append('%s="yes"' % conf)
+    dconfig = [
+        '# Written by curtin for custom storage config',
+        'add_dracutmodules+=" %s"' % (" ".join(add_modules)),
+    ]
 
+    dconfig.extend('%s="yes"' % conf for conf in add_conf)
     # Write out initramfs/dracut config for storage config
     dracut_conf_storage = os.path.sep.join(
         [target, '/etc/dracut.conf.d/50-curtin-storage.conf'])
@@ -1665,8 +1664,8 @@ def redhat_update_initramfs(target, cfg):
     with util.ChrootableTarget(target) as in_chroot:
         LOG.debug('Finding redhat kernel version: %s', kver_cmd)
         kver, _err = in_chroot.subp(kver_cmd, capture=True)
-        LOG.debug('Found kver=%s' % kver)
-        initramfs = '/boot/initramfs-%s.img' % kver
+        LOG.debug(f'Found kver={kver}')
+        initramfs = f'/boot/initramfs-{kver}.img'
         dracut_cmd = ['dracut', '-f', initramfs, kver]
         LOG.debug('Rebuilding initramfs with: %s', dracut_cmd)
         in_chroot.subp(dracut_cmd, capture=True)

@@ -53,29 +53,26 @@ class MAASReporter(BaseReporter):
             lines.extend(self._encode_field(name, data[name], boundary))
         for name in files:
             lines.extend(self._encode_file(name, files[name], boundary))
-        lines.extend(('--%s--' % boundary, ''))
+        lines.extend((f'--{boundary}--', ''))
         body = '\r\n'.join(lines)
 
         headers = {
-            'content-type': 'multipart/form-data; boundary=' + boundary,
+            'content-type': f'multipart/form-data; boundary={boundary}',
             'content-length': "%d" % len(body),
         }
+
         return body, headers
 
     def report(self, status, message=None, files=None):
         """Send the report."""
 
-        params = {}
-        params['status'] = status
+        params = {'status': status}
         if message is not None:
             params['error'] = message
 
         if files is None:
             files = []
-        install_files = {}
-        for fpath in files:
-            install_files[os.path.basename(fpath)] = open(fpath, "r")
-
+        install_files = {os.path.basename(fpath): open(fpath, "r") for fpath in files}
         data, headers = self.encode_multipart_data(params, install_files)
 
         msg = ""
@@ -88,7 +85,7 @@ class MAASReporter(BaseReporter):
                 self.url, data=data, headers=headers,
                 retries=self.retries)
             if payload != b'OK':
-                raise TypeError("Unexpected result from call: %s" % payload)
+                raise TypeError(f"Unexpected result from call: {payload}")
             else:
                 msg = "Success"
         except url_helper.UrlError as exc:
@@ -100,10 +97,11 @@ class MAASReporter(BaseReporter):
 
     def _encode_field(self, field_name, data, boundary):
         return (
-            '--' + boundary,
+            f'--{boundary}',
             'Content-Disposition: form-data; name="%s"' % field_name,
-            '', str(data),
-            )
+            '',
+            str(data),
+        )
 
     def _encode_file(self, name, fileObj, boundary):
         return (
@@ -116,8 +114,7 @@ class MAASReporter(BaseReporter):
             )
 
     def _random_string(self, length):
-        return ''.join(random.choice(string.ascii_letters)
-                       for ii in range(length + 1))
+        return ''.join(random.choice(string.ascii_letters) for _ in range(length + 1))
 
     def _get_content_type(self, filename):
         return mimetypes.guess_type(filename)[0] or 'application/octet-stream'

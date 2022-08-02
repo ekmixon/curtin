@@ -56,7 +56,7 @@ def get_default_mirrors(arch=None):
         return PRIMARY_ARCH_MIRRORS.copy()
     if arch in PORTS_ARCHES:
         return PORTS_MIRRORS.copy()
-    raise ValueError("No default mirror known for arch %s" % arch)
+    raise ValueError(f"No default mirror known for arch {arch}")
 
 
 def handle_apt(cfg, target=None):
@@ -96,8 +96,7 @@ def handle_apt(cfg, target=None):
         params['MIRROR'] = mirrors["MIRROR"]
 
         matcher = None
-        matchcfg = cfg.get('add_apt_repo_match', ADD_APT_REPO_MATCH)
-        if matchcfg:
+        if matchcfg := cfg.get('add_apt_repo_match', ADD_APT_REPO_MATCH):
             matcher = re.compile(matchcfg).search
 
         add_apt_sources(cfg['sources'], target,
@@ -160,11 +159,10 @@ def apply_debconf_selections(cfg, target=None):
             pkgs_cfgd.add(pkg)
 
     pkgs_installed = distro.get_installed_packages(target)
-    need_reconfig = pkgs_cfgd.intersection(pkgs_installed)
-    if len(need_reconfig) == 0:
+    if need_reconfig := pkgs_cfgd.intersection(pkgs_installed):
+        dpkg_reconfigure(need_reconfig, target=target)
+    else:
         return
-
-    dpkg_reconfigure(need_reconfig, target=target)
 
 
 def clean_cloud_init(target):
@@ -188,7 +186,7 @@ def mirrorurl_to_apt_fileprefix(mirror):
     """
     string = mirror
     if string.endswith("/"):
-        string = string[0:-1]
+        string = string[:-1]
     pos = string.find("://")
     if pos >= 0:
         string = string[pos + 3:]
@@ -213,8 +211,8 @@ def rename_apt_lists(new_mirrors, target=None, arch=None):
         if oprefix == nprefix:
             continue
         olen = len(oprefix)
-        for filename in glob.glob("%s_*" % oprefix):
-            newname = "%s%s" % (nprefix, filename[olen:])
+        for filename in glob.glob(f"{oprefix}_*"):
+            newname = f"{nprefix}{filename[olen:]}"
             LOG.debug("Renaming apt list %s to %s", filename, newname)
             try:
                 os.rename(filename, newname)
@@ -236,12 +234,13 @@ def update_default_mirrors(entries, mirrors, target, arch=None):
 
     # allow original file URIs without the trailing slash to match mirror
     # specifications that have it
-    noslash = {}
-    for key in mirrors_replacement.keys():
-        if key[-1] == '/':
-            noslash[key[:-1]] = mirrors_replacement[key]
+    noslash = {
+        key[:-1]: mirrors_replacement[key]
+        for key in mirrors_replacement
+        if key[-1] == '/'
+    }
 
-    mirrors_replacement.update(noslash)
+    mirrors_replacement |= noslash
 
     for entry in entries:
         entry.uri = mirrors_replacement.get(entry.uri, entry.uri)
@@ -275,7 +274,7 @@ def map_known_suites(suite, release):
 def commentify(entry):
     # handle commenting ourselves - it handles lines with
     # options better
-    return SourceEntry('# ' + str(entry))
+    return SourceEntry(f'# {str(entry)}')
 
 
 def disable_suites(disabled, entries, release):
@@ -359,7 +358,7 @@ def generate_sources_list(cfg, release, mirrors, target=None, arch=None):
 
     orig = paths.target_path(target, aptsrc)
     if os.path.exists(orig):
-        os.rename(orig, orig + ".curtin.old")
+        os.rename(orig, f"{orig}.curtin.old")
     util.write_file(paths.target_path(target, aptsrc), output, mode=0o644)
 
 
@@ -436,7 +435,7 @@ def add_apt_sources(srcdict, target=None, template_params=None,
         raise ValueError('did not get a valid repo matcher')
 
     if not isinstance(srcdict, dict):
-        raise TypeError('unknown apt format: %s' % (srcdict))
+        raise TypeError(f'unknown apt format: {srcdict}')
 
     for filename in srcdict:
         ent = srcdict[filename]
@@ -708,13 +707,12 @@ def translate_old_apt_features(cfg):
         del cfg['apt_mirrors']
         # to work this also needs to disable the default protection
         psl = predef_apt_cfg.get('preserve_sources_list')
-        if psl is not None:
-            if config.value_as_boolean(psl) is True:
-                msg = ("Error in apt_mirror configuration: "
-                       "apt_mirrors and preserve_sources_list: True "
-                       "are mutually exclusive")
-                LOG.error(msg)
-                raise ValueError(msg)
+        if psl is not None and config.value_as_boolean(psl) is True:
+            msg = ("Error in apt_mirror configuration: "
+                   "apt_mirrors and preserve_sources_list: True "
+                   "are mutually exclusive")
+            LOG.error(msg)
+            raise ValueError(msg)
         cfg['apt']['preserve_sources_list'] = False
 
     if cfg.get('debconf_selections') is not None:

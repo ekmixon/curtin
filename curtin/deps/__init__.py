@@ -50,7 +50,7 @@ else:
         ('import oauthlib.oauth1', 'python-oauthlib', 'python3-oauthlib'),)
 
 # zfs is > trusty only
-if not lsb_release()['codename'] in ["precise", "trusty"]:
+if lsb_release()['codename'] not in ["precise", "trusty"]:
     REQUIRED_EXECUTABLES.append(('zfs', 'zfsutils-linux'))
     REQUIRED_KERNEL_MODULES.append('zfs')
 
@@ -67,14 +67,16 @@ class MissingDeps(Exception):
         self.fatal = None in deps
 
     def __str__(self):
-        if self.fatal:
-            if not len(self.deps):
-                return self.message + " Unresolvable."
-            return (self.message +
-                    " Unresolvable.  Partially resolvable with packages: %s" %
-                    ' '.join(self.deps))
-        else:
-            return self.message + " Install packages: %s" % ' '.join(self.deps)
+        if not self.fatal:
+            return self.message + f" Install packages: {' '.join(self.deps)}"
+        return (
+            (
+                self.message
+                + f" Unresolvable.  Partially resolvable with packages: {' '.join(self.deps)}"
+            )
+            if len(self.deps)
+            else f"{self.message} Unresolvable."
+        )
 
 
 def check_import(imports, py2pkgs, py3pkgs, message=None):
@@ -93,13 +95,9 @@ def check_import(imports, py2pkgs, py3pkgs, message=None):
         if isinstance(imports, str):
             message = "Failed '%s'." % imports
         else:
-            message = "Unable to do any of %s." % import_group
+            message = f"Unable to do any of {import_group}."
 
-    if sys.version_info[0] == 2:
-        pkgs = py2pkgs
-    else:
-        pkgs = py3pkgs
-
+    pkgs = py2pkgs if sys.version_info[0] == 2 else py3pkgs
     raise MissingDeps(message, pkgs)
 
 
@@ -143,8 +141,8 @@ def check_kernel_modules(modules=None):
         try:
             subp(['modinfo', '--filename', kmod], capture=True)
         except ProcessExecutionError:
-            kernel_pkg = 'linux-image-%s' % os.uname()[2]
-            return [MissingDeps('missing kernel module %s' % kmod, kernel_pkg)]
+            kernel_pkg = f'linux-image-{os.uname()[2]}'
+            return [MissingDeps(f'missing kernel module {kmod}', kernel_pkg)]
 
     return []
 

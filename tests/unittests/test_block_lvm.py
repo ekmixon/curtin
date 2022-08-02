@@ -33,8 +33,18 @@ class TestBlockLvm(CiTestCase):
                                            query_name, self.vg_name)
         self.assertEqual(len(result_list), 2)
         mock_util.subp.assert_called_with(
-            [lvtool_name, '-C', '--separator', lvm._SEP, '--noheadings', '-o',
-             '{},{}'.format(match_name, query_name)], capture=True)
+            [
+                lvtool_name,
+                '-C',
+                '--separator',
+                lvm._SEP,
+                '--noheadings',
+                '-o',
+                f'{match_name},{query_name}',
+            ],
+            capture=True,
+        )
+
         self.assertEqual(result_list, query_results)
         # make sure _filter_lvm_info can fail gracefully if no match
         result_list = lvm._filter_lvm_info(lvtool_name, match_name,
@@ -60,7 +70,7 @@ class TestBlockLvm(CiTestCase):
         make sure that split_lvm_name makes the right call to dmsetup splitname
         """
         lv_name = 'root_lvol'
-        full_name = '{}-{}'.format(self.vg_name, lv_name)
+        full_name = f'{self.vg_name}-{lv_name}'
         mock_util.subp.return_value = (
             '  {vg_name}{sep}{lv_name} '.format(
                 vg_name=self.vg_name, lv_name=lv_name, sep=lvm._SEP), '')
@@ -77,15 +87,14 @@ class TestBlockLvm(CiTestCase):
     def test_lvm_scan(self, mock_distro, mock_util, mock_lvmetad):
         """check that lvm_scan formats commands correctly for each release"""
         cmds = [['pvscan'], ['vgscan']]
-        for (count, (codename, lvmetad_status, use_cache)) in enumerate(
-                [('precise', False, False),
+        for codename, lvmetad_status, use_cache in [('precise', False, False),
                  ('trusty', False, False),
                  ('xenial', False, False), ('xenial', True, True),
-                 (None, True, True), (None, False, False)]):
+                 (None, True, True), (None, False, False)]:
             mock_distro.lsb_release.return_value = {'codename': codename}
             mock_lvmetad.return_value = lvmetad_status
             lvm.lvm_scan()
-            expected = [cmd for cmd in cmds]
+            expected = list(cmds)
             for cmd in expected:
                 if lvmetad_status:
                     cmd.append('--cache')

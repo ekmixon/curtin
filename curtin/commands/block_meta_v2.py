@@ -80,7 +80,7 @@ class SFDiskPartTable:
         return amount * self._sector_bytes
 
     def render(self):
-        r = ['label: ' + self.label, ''] + [e.render() for e in self.entries]
+        r = [f'label: {self.label}', ''] + [e.render() for e in self.entries]
         return '\n'.join(r)
 
     def apply(self, device):
@@ -110,12 +110,11 @@ class GPTPartTable(SFDiskPartTable):
         number = action.get('number', len(self.entries) + 1)
         if 'offset' in action:
             start = self.bytes2sectors(action['offset'])
+        elif self.entries:
+            prev = self.entries[-1]
+            start = align_up(prev.start + prev.size, self.one_mib_sectors)
         else:
-            if self.entries:
-                prev = self.entries[-1]
-                start = align_up(prev.start + prev.size, self.one_mib_sectors)
-            else:
-                start = self.one_mib_sectors
+            start = self.one_mib_sectors
         size = self.bytes2sectors(action['size'])
         uuid = action.get('uuid')
         type = FLAG_TO_GUID.get(action.get('flag'))
@@ -164,8 +163,7 @@ class DOSPartTable(SFDiskPartTable):
         else:
             number = action.get('number', len(self.entries) + 1)
             if number > 4:
-                raise Exception(
-                    "primary partition cannot have number %s" % (number,))
+                raise Exception(f"primary partition cannot have number {number}")
             if start is None:
                 prev = None
                 for entry in self.entries:
@@ -179,10 +177,7 @@ class DOSPartTable(SFDiskPartTable):
                         self.one_mib_sectors)
         size = self.bytes2sectors(action['size'])
         type = FLAG_TO_MBR_TYPE.get(flag)
-        if flag == 'boot':
-            bootable = True
-        else:
-            bootable = None
+        bootable = True if flag == 'boot' else None
         entry = PartTableEntry(
             number, start, size, type, uuid=None, bootable=bootable)
         if flag == 'extended':
@@ -195,9 +190,8 @@ def _find_part_info(sfdisk_info, offset):
     for part in sfdisk_info['partitions']:
         if part['start'] == offset:
             return part
-    else:
-        raise Exception(
-            "could not find existing partition by offset")
+    raise Exception(
+        "could not find existing partition by offset")
 
 
 def _wipe_for_action(action):
@@ -209,19 +203,18 @@ def _wipe_for_action(action):
         return None
     # New partitions are wiped by default apart from extended partitions, where
     # it would destroy the EBR.
-    if action.get('flag') == 'extended':
-        return None
-    return 'superblock'
+    return None if action.get('flag') == 'extended' else 'superblock'
 
 
 def disk_handler_v2(info, storage_config, handlers):
     disk_handler_v1(info, storage_config, handlers)
 
-    part_actions = []
+    part_actions = [
+        action
+        for action in storage_config.values()
+        if action['type'] == 'partition' and action['device'] == info['id']
+    ]
 
-    for action in storage_config.values():
-        if action['type'] == 'partition' and action['device'] == info['id']:
-            part_actions.append(action)
 
     table_cls = {
         'msdos': DOSPartTable,

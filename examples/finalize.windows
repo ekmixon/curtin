@@ -43,12 +43,11 @@ def curthooks():
         sys.stderr.write("Unable to find cloudbase-init.cfg.\n")
         sys.exit(2)
 
-    fp = open(cloudbase_init_cfg, 'a')
-    fp_u = open(cloudbase_init_unattended_cfg, 'a')
-    for i in cloudbase_init['config'].splitlines():
-        fp.write("%s\r\n" % i)
-        fp_u.write("%s\r\n" % i)
-    fp.close()
+    with open(cloudbase_init_cfg, 'a') as fp:
+        fp_u = open(cloudbase_init_unattended_cfg, 'a')
+        for i in cloudbase_init['config'].splitlines():
+            fp.write("%s\r\n" % i)
+            fp_u.write("%s\r\n" % i)
     fp_u.close()
 
 

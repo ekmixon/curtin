@@ -148,43 +148,52 @@ def mdadm_assemble(md_devname=None, devices=[], spares=[], scan=False,
 
 def mdadm_create(md_devname, raidlevel, devices, spares=None, container=None,
                  md_name="", metadata=None):
-    LOG.debug('mdadm_create: ' +
-              'md_name=%s raidlevel=%s ' % (md_devname, raidlevel) +
-              ' devices=%s spares=%s name=%s' % (devices, spares, md_name))
+    LOG.debug(
+        (
+            ('mdadm_create: ' + f'md_name={md_devname} raidlevel={raidlevel} ')
+            + f' devices={devices} spares={spares} name={md_name}'
+        )
+    )
+
 
     assert_valid_devpath(md_devname)
     if not metadata:
         metadata = 'default'
 
     if raidlevel not in VALID_RAID_LEVELS:
-        raise ValueError('Invalid raidlevel: [{}]'.format(raidlevel))
+        raise ValueError(f'Invalid raidlevel: [{raidlevel}]')
 
     min_devices = md_minimum_devices(raidlevel)
-    devcnt = len(devices) if not container else \
-        len(md_get_devices_list(container))
+    devcnt = len(md_get_devices_list(container)) if container else len(devices)
     if devcnt < min_devices:
-        err = 'Not enough devices (' + str(devcnt) + ') '
-        err += 'for raidlevel: ' + str(raidlevel)
-        err += ' minimum devices needed: ' + str(min_devices)
+        err = f'Not enough devices ({devcnt}) '
+        err += f'for raidlevel: {str(raidlevel)}'
+        err += f' minimum devices needed: {str(min_devices)}'
         raise ValueError(err)
 
     if spares and raidlevel not in SPARE_RAID_LEVELS:
-        err = ('Raidlevel does not support spare devices: ' + str(raidlevel))
+        err = f'Raidlevel does not support spare devices: {str(raidlevel)}'
         raise ValueError(err)
 
     (hostname, _err) = util.subp(["hostname", "-s"], rcs=[0], capture=True)
 
-    cmd = ["mdadm", "--create", md_devname, "--run",
-           "--homehost=%s" % hostname.strip(),
-           "--raid-devices=%s" % devcnt]
+    cmd = [
+        "mdadm",
+        "--create",
+        md_devname,
+        "--run",
+        f"--homehost={hostname.strip()}",
+        f"--raid-devices={devcnt}",
+    ]
+
 
     if not container:
-        cmd.append("--metadata=%s" % metadata)
+        cmd.append(f"--metadata={metadata}")
     if raidlevel != 'container':
-        cmd.append("--level=%s" % raidlevel)
+        cmd.append(f"--level={raidlevel}")
 
     if md_name:
-        cmd.append("--name=%s" % md_name)
+        cmd.append(f"--name={md_name}")
 
     if container:
         cmd.append(container)
@@ -198,7 +207,7 @@ def mdadm_create(md_devname, raidlevel, devices, spares=None, container=None,
         cmd.append(device)
 
     if spares:
-        cmd.append("--spare-devices=%s" % len(spares))
+        cmd.append(f"--spare-devices={len(spares)}")
         for device in spares:
             zero_device(device)
             cmd.append(device)
@@ -214,7 +223,7 @@ def mdadm_create(md_devname, raidlevel, devices, spares=None, container=None,
         (out, _err) = util.subp(["lsmod"], capture=True)
         if not _err:
             LOG.debug('modules loaded: \n%s' % out)
-        raidmodpath = '/lib/modules/%s/kernel/drivers/md' % os.uname()[2]
+        raidmodpath = f'/lib/modules/{os.uname()[2]}/kernel/drivers/md'
         (out, _err) = util.subp(["find", raidmodpath],
                                 rcs=[0, 1], capture=True)
         if out:
@@ -245,15 +254,10 @@ def mdadm_examine(devpath, export=MDADM_USE_EXPORT):
     try:
         (out, _err) = util.subp(cmd, capture=True)
     except util.ProcessExecutionError:
-        LOG.debug('not a valid md member device: ' + devpath)
+        LOG.debug(f'not a valid md member device: {devpath}')
         return {}
 
-    if export:
-        data = __mdadm_export_to_dict(out)
-    else:
-        data = __mdadm_detail_to_dict(out)
-
-    return data
+    return __mdadm_export_to_dict(out) if export else __mdadm_detail_to_dict(out)
 
 
 def set_sync_action(devpath, action=None, retries=None):
@@ -291,7 +295,6 @@ def set_sync_action(devpath, action=None, retries=None):
             LOG.debug(
                 "mdadm: set sync_action failed, retrying in %s seconds", wait)
             time.sleep(wait)
-            pass
 
 
 def mdadm_stop(devpath, retries=None):
@@ -303,7 +306,7 @@ def mdadm_stop(devpath, retries=None):
     sync_max = md_sysfs_attr_path(devpath, 'sync_max')
     sync_min = md_sysfs_attr_path(devpath, 'sync_min')
 
-    LOG.info("mdadm stopping: %s" % devpath)
+    LOG.info(f"mdadm stopping: {devpath}")
     for (attempt, wait) in enumerate(retries):
         try:
             LOG.debug('mdadm: stop on %s attempt %s', devpath, attempt)
@@ -348,15 +351,13 @@ def mdadm_stop(devpath, retries=None):
                              util.load_file('/proc/mdstat'))
             LOG.debug("mdadm: stop failed, retrying in %s seconds", wait)
             time.sleep(wait)
-            pass
-
     raise OSError('Failed to stop mdadm device %s', devpath)
 
 
 def mdadm_remove(devpath):
     assert_valid_devpath(devpath)
 
-    LOG.info("mdadm removing: %s" % devpath)
+    LOG.info(f"mdadm removing: {devpath}")
     out, err = util.subp(["mdadm", "--remove", devpath],
                          rcs=[0], capture=True)
     LOG.debug("mdadm remove:\n%s\n%s", out, err)
@@ -417,7 +418,7 @@ def zero_device(devpath, force=False):
     LOG.info('mdadm: wiping md member %s @ offsets %s', devpath, offsets)
     zero_file_at_offsets(devpath, offsets, buflen=1024,
                          count=1024, strict=True)
-    LOG.info('mdadm: successfully wiped %s' % devpath)
+    LOG.info(f'mdadm: successfully wiped {devpath}')
 
 
 def mdadm_query_detail(md_devname, export=MDADM_USE_EXPORT, rawoutput=False):
@@ -431,12 +432,7 @@ def mdadm_query_detail(md_devname, export=MDADM_USE_EXPORT, rawoutput=False):
     if rawoutput:
         return (out, err)
 
-    if export:
-        data = __mdadm_export_to_dict(out)
-    else:
-        data = __mdadm_detail_to_dict(out)
-
-    return data
+    return __mdadm_export_to_dict(out) if export else __mdadm_detail_to_dict(out)
 
 
 def mdadm_detail_scan():
@@ -457,21 +453,20 @@ def md_present(mdname):
     try:
         mdstat = util.load_file('/proc/mdstat')
     except IOError as e:
-        if util.is_file_not_found_exc(e):
-            LOG.warning('Failed to read /proc/mdstat; '
-                        'md modules might not be loaded')
-            return False
-        else:
+        if not util.is_file_not_found_exc(e):
             raise e
 
+        LOG.warning('Failed to read /proc/mdstat; '
+                    'md modules might not be loaded')
+        return False
     md_kname = dev_short(mdname)
-    # Find lines like:
-    # md10 : active raid1 vdc1[1] vda2[0]
-    present = [line for line in mdstat.splitlines()
-               if line.split(":")[0].rstrip() == md_kname]
-    if len(present) > 0:
-        return True
-    return False
+    return bool(
+        present := [
+            line
+            for line in mdstat.splitlines()
+            if line.split(":")[0].rstrip() == md_kname
+        ]
+    )
 
 
 # ------------------------------ #
@@ -479,16 +474,12 @@ def valid_mdname(md_devname):
     assert_valid_devpath(md_devname)
 
     if not is_valid_device(md_devname):
-        raise ValueError('Specified md device does not exist: ' + md_devname)
-        return False
-
+        raise ValueError(f'Specified md device does not exist: {md_devname}')
     return True
 
 
 def valid_devpath(devpath):
-    if devpath:
-        return devpath.startswith('/dev')
-    return False
+    return devpath.startswith('/dev') if devpath else False
 
 
 def assert_valid_devpath(devpath):
@@ -509,7 +500,7 @@ def md_sysfs_attr(md_devname, attrname, default=''):
     """ Return the attribute str of an md device found under the 'md' dir """
     attrdata = default
     if not valid_mdname(md_devname):
-        raise ValueError('Invalid md devicename: [{}]'.format(md_devname))
+        raise ValueError(f'Invalid md devicename: [{md_devname}]')
 
     sysfs_attr_path = md_sysfs_attr_path(md_devname, attrname)
     if os.path.isfile(sysfs_attr_path):
@@ -533,10 +524,7 @@ def md_minimum_devices(raidlevel):
         return 2
     if rl in [5]:
         return 3
-    if rl in [6, 10]:
-        return 4
-
-    return -1
+    return 4 if rl in [6, 10] else -1
 
 
 def __md_check_array_state(md_devname, mode='READWRITE'):
@@ -546,13 +534,10 @@ def __md_check_array_state(md_devname, mode='READWRITE'):
         'ERROR': ERROR_RAID_STATES,
     }
     if mode not in modes:
-        raise ValueError('Invalid Array State mode: ' + mode)
+        raise ValueError(f'Invalid Array State mode: {mode}')
 
     array_state = md_sysfs_attr(md_devname, 'array_state')
-    if array_state in modes[mode]:
-        return True
-
-    return False
+    return array_state in modes[mode]
 
 
 def md_check_array_state_rw(md_devname):
@@ -605,10 +590,8 @@ def __mdadm_detail_to_dict(input):
     '''
     data = {}
 
-    # first line, trim trailing :
-    device = input.splitlines()[0][:-1]
-    if device:
-        data.update({'device': device})
+    if device := input.splitlines()[0][:-1]:
+        data['device'] = device
     else:
         raise ValueError('Failed to determine device from input:\n%s', input)
 
@@ -627,8 +610,8 @@ def __mdadm_detail_to_dict(input):
         key = f[0].replace(' ', '_').lower()
         val = f[1]
         if key in data:
-            raise ValueError('Duplicate key in mdadm regex parsing: ' + key)
-        data.update({key: val})
+            raise ValueError(f'Duplicate key in mdadm regex parsing: {key}')
+        data[key] = val
 
     return data
 
@@ -636,13 +619,13 @@ def __mdadm_detail_to_dict(input):
 def md_device_key_role(devname):
     if not devname:
         raise ValueError('Missing parameter devname')
-    return 'MD_DEVICE_' + dev_short(devname) + '_ROLE'
+    return f'MD_DEVICE_{dev_short(devname)}_ROLE'
 
 
 def md_device_key_dev(devname):
     if not devname:
         raise ValueError('Missing parameter devname')
-    return 'MD_DEVICE_' + dev_short(devname) + '_DEV'
+    return f'MD_DEVICE_{dev_short(devname)}_DEV'
 
 
 def md_read_run_mdadm_map():
@@ -664,7 +647,7 @@ def md_read_run_mdadm_map():
             data = fp.read().strip()
         for entry in data.split('\n'):
             (key, meta, md_uuid, dev) = entry.split()
-            mdadm_map.update({key: (meta, md_uuid, dev)})
+            mdadm_map[key] = (meta, md_uuid, dev)
 
     return mdadm_map
 
@@ -673,11 +656,14 @@ def md_check_array_uuid(md_devname, md_uuid):
     valid_mdname(md_devname)
 
     # confirm we have /dev/{mdname} by following the udev symlink
-    mduuid_path = ('/dev/disk/by-id/md-uuid-' + md_uuid)
+    mduuid_path = f'/dev/disk/by-id/md-uuid-{md_uuid}'
     mdlink_devname = dev_path(os.path.realpath(mduuid_path))
     if md_devname != mdlink_devname:
-        err = ('Mismatch between devname and md-uuid symlink: ' +
-               '%s -> %s != %s' % (mduuid_path, mdlink_devname, md_devname))
+        err = (
+            'Mismatch between devname and md-uuid symlink: '
+            + f'{mduuid_path} -> {mdlink_devname} != {md_devname}'
+        )
+
         raise ValueError(err)
 
 
@@ -689,26 +675,28 @@ def md_get_uuid(md_devname):
 
 
 def _compare_devlist(expected, found):
-    LOG.debug('comparing device lists: '
-              'expected: {} found: {}'.format(expected, found))
+    LOG.debug(f'comparing device lists: expected: {expected} found: {found}')
     expected = set(expected)
     found = set(found)
     if expected != found:
         missing = expected.difference(found)
         extra = found.difference(expected)
-        raise ValueError("RAID array device list does not match."
-                         " Missing: {} Extra: {}".format(missing, extra))
+        raise ValueError(
+            f"RAID array device list does not match. Missing: {missing} Extra: {extra}"
+        )
 
 
 def md_check_raidlevel(md_devname, detail, raidlevel):
     # Validate raidlevel against what curtin supports configuring
     if raidlevel not in VALID_RAID_LEVELS:
-        err = ('Invalid raidlevel: ' + raidlevel +
-               ' Must be one of: ' + str(VALID_RAID_LEVELS))
+        err = (f'Invalid raidlevel: {raidlevel}' + ' Must be one of: ') + str(
+            VALID_RAID_LEVELS
+        )
+
         raise ValueError(err)
     # normalize raidlevel to the values mdadm prints.
     if isinstance(raidlevel, int) or len(raidlevel) <= 2:
-        raidlevel = 'raid' + str(raidlevel)
+        raidlevel = f'raid{str(raidlevel)}'
     elif raidlevel == 'stripe':
         raidlevel = 'raid0'
     elif raidlevel == 'mirror':
@@ -746,19 +734,18 @@ def md_check_array_state(md_devname):
     sync_action = md_sysfs_attr(md_devname, 'sync_action', None)
 
     if not writable:
-        raise ValueError('Array not in writable state: ' + md_devname)
+        raise ValueError(f'Array not in writable state: {md_devname}')
     if degraded is not None and degraded != "0":
-        raise ValueError('Array in degraded state: ' + md_devname)
+        raise ValueError(f'Array in degraded state: {md_devname}')
     if degraded is not None and sync_action not in ("idle", "resync"):
-        raise ValueError(
-            'Array is %s, not idle: %s' % (sync_action, md_devname))
+        raise ValueError(f'Array is {sync_action}, not idle: {md_devname}')
 
 
 def md_check_uuid(md_devname):
-    md_uuid = md_get_uuid(md_devname)
-    if not md_uuid:
-        raise ValueError('Failed to get md UUID from device: ' + md_devname)
-    md_check_array_uuid(md_devname, md_uuid)
+    if md_uuid := md_get_uuid(md_devname):
+        md_check_array_uuid(md_devname, md_uuid)
+    else:
+        raise ValueError(f'Failed to get md UUID from device: {md_devname}')
 
 
 def md_check_devices(md_devname, devices):
@@ -777,7 +764,7 @@ def md_check_devices(md_devname, devices):
     #     raid is currently degraded or not, which would also explain the
     #     failure.
     md_raid_devices = md_get_devices_list(md_devname)
-    LOG.debug('md_check_devices: md_raid_devs: ' + str(md_raid_devices))
+    LOG.debug(f'md_check_devices: md_raid_devs: {str(md_raid_devices)}')
     _compare_devlist(devices, md_raid_devices)
 
 
@@ -794,13 +781,11 @@ def md_check_array_membership(md_devname, devices):
     for device in devices:
         dev_examine = mdadm_examine(device, export=True)
         if 'MD_UUID' not in dev_examine:
-            raise ValueError('Device is not part of an array: ' + device)
+            raise ValueError(f'Device is not part of an array: {device}')
         dev_uuid = dev_examine['MD_UUID']
         if dev_uuid != md_uuid:
-            err = "Device {} is not part of {} array. ".format(device,
-                                                               md_devname)
-            err += "MD_UUID mismatch: device:{} != array:{}".format(dev_uuid,
-                                                                    md_uuid)
+            err = f"Device {device} is not part of {md_devname} array. "
+            err += f"MD_UUID mismatch: device:{dev_uuid} != array:{md_uuid}"
             raise ValueError(err)
 
 
@@ -808,9 +793,13 @@ def md_check(md_devname, raidlevel, devices, spares, container):
     ''' Check passed in variables from storage configuration against
         the system we're running upon.
     '''
-    LOG.debug('RAID validation: ' +
-              'name={} raidlevel={} devices={} spares={} container={}'.format(
-                  md_devname, raidlevel, devices, spares, container))
+    LOG.debug(
+        (
+            'RAID validation: '
+            + f'name={md_devname} raidlevel={raidlevel} devices={devices} spares={spares} container={container}'
+        )
+    )
+
     assert_valid_devpath(md_devname)
 
     detail = mdadm_query_detail(md_devname)
@@ -825,14 +814,13 @@ def md_check(md_devname, raidlevel, devices, spares, container):
         md_check_array_membership(md_devname, devices + spares)
     else:
         if 'MD_CONTAINER' not in detail:
-            raise ValueError("%s is not in a container" % (
-                md_devname))
+            raise ValueError(f"{md_devname} is not in a container")
         actual_container = os.path.realpath(detail['MD_CONTAINER'])
         if actual_container != container:
             raise ValueError("%s is in container %r, not %r" % (
                 md_devname, actual_container, container))
 
-    LOG.debug('RAID array OK: ' + md_devname)
+    LOG.debug(f'RAID array OK: {md_devname}')
 
 
 def md_is_in_container(md_devname):

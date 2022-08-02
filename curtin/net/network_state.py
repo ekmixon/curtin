@@ -60,7 +60,7 @@ class NetworkState:
 
         required_keys = NETWORK_STATE_REQUIRED_KEYS[state['version']]
         if not self.valid_command(state, required_keys):
-            msg = 'Invalid state, missing keys: %s' % (required_keys)
+            msg = f'Invalid state, missing keys: {required_keys}'
             LOG.error(msg)
             raise Exception(msg)
 
@@ -113,12 +113,15 @@ class NetworkState:
         subnets = command.get('subnets')
         if subnets:
             for subnet in subnets:
-                if subnet['type'] == 'static':
-                    if 'netmask' in subnet and ':' in subnet['address']:
-                        subnet['netmask'] = mask2cidr(subnet['netmask'])
-                        for route in subnet.get('routes', []):
-                            if 'netmask' in route:
-                                route['netmask'] = mask2cidr(route['netmask'])
+                if (
+                    subnet['type'] == 'static'
+                    and 'netmask' in subnet
+                    and ':' in subnet['address']
+                ):
+                    subnet['netmask'] = mask2cidr(subnet['netmask'])
+                    for route in subnet.get('routes', []):
+                        if 'netmask' in route:
+                            route['netmask'] = mask2cidr(route['netmask'])
 
         iface.update({
             'name': command.get('name'),
@@ -149,7 +152,7 @@ class NetworkState:
             'vlan_id',
         ]
         if not self.valid_command(command, required_keys):
-            print('Skipping Invalid command: {}'.format(command))
+            print(f'Skipping Invalid command: {command}')
             print(self.dump_network_state())
             return
 
@@ -191,7 +194,7 @@ class NetworkState:
             'params',
         ]
         if not self.valid_command(command, required_keys):
-            print('Skipping Invalid command: {}'.format(command))
+            print(f'Skipping Invalid command: {command}')
             print(self.dump_network_state())
             return
 
@@ -304,7 +307,7 @@ class NetworkState:
         dns = self.network_state.get('dns')
         if 'address' in command:
             addrs = command['address']
-            if not type(addrs) == list:
+            if type(addrs) != list:
                 addrs = [addrs]
             for addr in addrs:
                 dns['nameservers'].append(addr)
@@ -338,7 +341,7 @@ class NetworkState:
 
 def cidr2mask(cidr):
     mask = [0, 0, 0, 0]
-    for i in list(range(0, cidr)):
+    for i in list(range(cidr)):
         idx = int(i / 8)
         mask[idx] = mask[idx] + (1 << (7 - i % 8))
     return ".".join([str(x) for x in mask])
@@ -347,7 +350,7 @@ def cidr2mask(cidr):
 def ipv4mask2cidr(mask):
     if '.' not in mask:
         return mask
-    return sum([bin(int(x)).count('1') for x in mask.split('.')])
+    return sum(bin(int(x)).count('1') for x in mask.split('.'))
 
 
 def ipv6mask2cidr(mask):
@@ -397,8 +400,7 @@ if __name__ == '__main__':
         print()
         print("----NS2-----")
         print(ns2.dump_network_state())
-        print("NS1 == NS2 ?=> {}".format(
-            ns1.network_state == ns2.network_state))
+        print(f"NS1 == NS2 ?=> {ns1.network_state == ns2.network_state}")
         eni = net.render_interfaces(ns2.network_state)
         print(eni)
         udev_rules = net.render_persistent_net(ns2.network_state)
@@ -417,8 +419,7 @@ if __name__ == '__main__':
 
         print("Loading state from file")
         ns2 = from_state_file(ns1_state)
-        print("NS1 == NS2 ?=> {}".format(
-            ns1.network_state == ns2.network_state))
+        print(f"NS1 == NS2 ?=> {ns1.network_state == ns2.network_state}")
 
     def test_output(network_config):
         (version, config) = load_config(network_config)
@@ -427,14 +428,12 @@ if __name__ == '__main__':
         random.shuffle(config)
         ns2 = NetworkState(version=version, config=config)
         ns2.parse_config()
-        print("NS1 == NS2 ?=> {}".format(
-            ns1.network_state == ns2.network_state))
+        print(f"NS1 == NS2 ?=> {ns1.network_state == ns2.network_state}")
         eni_1 = net.render_interfaces(ns1.network_state)
         eni_2 = net.render_interfaces(ns2.network_state)
         print(eni_1)
         print(eni_2)
-        print("eni_1 == eni_2 ?=> {}".format(
-            eni_1 == eni_2))
+        print(f"eni_1 == eni_2 ?=> {eni_1 == eni_2}")
 
     y = curtin_config.load_config(sys.argv[1])
     network_config = y.get('network')

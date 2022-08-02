@@ -23,8 +23,7 @@ def storage_config_required_packages(storage_config, mapping):
     needed_packages = []
 
     # get reqs by device operation type
-    dev_configs = set(operation['type']
-                      for operation in storage_config['config'])
+    dev_configs = {operation['type'] for operation in storage_config['config']}
 
     for dev_type in dev_configs:
         if dev_type in mapping:
@@ -37,9 +36,12 @@ def storage_config_required_packages(storage_config, mapping):
 
     # for any format operations, check the fstype and
     # determine if we need any mkfs tools as well.
-    format_configs = set([operation['fstype']
-                         for operation in storage_config['config']
-                         if operation['type'] == 'format'])
+    format_configs = {
+        operation['fstype']
+        for operation in storage_config['config']
+        if operation['type'] == 'format'
+    }
+
     for format_type in format_configs:
         if format_type in mapping:
             needed_packages.extend(mapping[format_type])
@@ -94,7 +96,7 @@ def detect_required_packages_mapping(osfamily=DISTROS.debian):
         },
     }
     if osfamily not in distro_mapping:
-        raise ValueError('No block package mapping for distro: %s' % osfamily)
+        raise ValueError(f'No block package mapping for distro: {osfamily}')
 
     cfg_map = {
         'handler': storage_config_required_packages,

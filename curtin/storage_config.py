@@ -118,12 +118,11 @@ def validate_config(config, sourcefile=None):
                                                                e.instance)
             raise ValueError(msg)
         if 'type' not in e.instance:
-            msg = "%s in %s" % (e.message, e.instance)
+            msg = f"{e.message} in {e.instance}"
             raise ValueError(msg)
 
         instance_type = e.instance['type']
-        stype = get_storage_types().get(instance_type)
-        if stype:
+        if stype := get_storage_types().get(instance_type):
             try:
                 jsonschema.validate(e.instance, stype.schema)
             except jsonschema.exceptions.ValidationError as f:
@@ -131,8 +130,7 @@ def validate_config(config, sourcefile=None):
                                         util.json_dumps(e.instance))
                 raise(ValueError(msg))
         else:
-            msg = "Unknown storage type: %s in %s" % (instance_type,
-                                                      e.instance)
+            msg = f"Unknown storage type: {instance_type} in {e.instance}"
             raise ValueError(msg)
 
 
@@ -188,7 +186,7 @@ def _stype_to_order_key(stype):
         'zpool': default_sort,
     }
     if stype not in order_key:
-        raise ValueError('Unknown storage type: %s' % stype)
+        raise ValueError(f'Unknown storage type: {stype}')
 
     return order_key.get(stype)
 
@@ -217,19 +215,17 @@ def _validate_dep_type(source_id, dep_key, dep_id, sconfig):
         'zpool': {'disk', 'partition'},
     }
     if source_id not in sconfig:
-        raise ValueError(
-                'Invalid source_id (%s) not in storage config' % source_id)
+        raise ValueError(f'Invalid source_id ({source_id}) not in storage config')
     if dep_id not in sconfig:
-        raise ValueError(
-                'Invalid dep_id (%s) not in storage config' % dep_id)
+        raise ValueError(f'Invalid dep_id ({dep_id}) not in storage config')
 
     source_type = sconfig[source_id]['type']
     dep_type = sconfig[dep_id]['type']
 
     if source_type not in depends:
-        raise ValueError('Invalid source_type: %s' % source_type)
+        raise ValueError(f'Invalid source_type: {source_type}')
     if dep_type not in depends:
-        raise ValueError('Invalid type in depedency: %s' % dep_type)
+        raise ValueError(f'Invalid type in depedency: {dep_type}')
 
     source_deps = depends[source_type]
     result = dep_type in source_deps
@@ -239,10 +235,9 @@ def _validate_dep_type(source_id, dep_key, dep_id, sconfig):
                                              source_deps, result))
     if not result:
         # Partition(sda1).device -> Partition(sda3)
-        s_str = '%s(id=%s).%s' % (source_type.capitalize(),
-                                  source_id, dep_key)
-        d_str = '%s(id=%s)' % (dep_type.capitalize(), dep_id)
-        dep_chain = "%s cannot depend upon on %s" % (s_str, d_str)
+        s_str = f'{source_type.capitalize()}(id={source_id}).{dep_key}'
+        d_str = f'{dep_type.capitalize()}(id={dep_id})'
+        dep_chain = f"{s_str} cannot depend upon on {d_str}"
         raise ValueError(dep_chain)
 
     return result
@@ -336,7 +331,7 @@ def merge_config_trees_to_list(config_trees):
             max_level = level
         item_cfg = tree[top_item_id]
         if top_item_id in reg:
-            LOG.warning('Dropping Duplicate id: %s' % top_item_id)
+            LOG.warning(f'Dropping Duplicate id: {top_item_id}')
             continue
         reg[top_item_id] = {'level': level, 'config': item_cfg}
 
@@ -359,7 +354,7 @@ def merge_config_trees_to_list(config_trees):
 
     # [entry for tag in tags]
     merged = []
-    for lvl in range(0, max_level + 1):
+    for lvl in range(max_level + 1):
         level_configs = []
         for item_id, entry in reg.items():
             if entry['level'] == lvl:
@@ -384,15 +379,14 @@ def extract_storage_ordered_dict(config):
     storage_config = config.get('storage')
     if not storage_config:
         raise ValueError("no 'storage' entry in config")
-    scfg = storage_config.get('config')
-    if not scfg:
+    if scfg := storage_config.get('config'):
+        # Since storage config will often have to be searched for a value by its
+        # id, and this can become very inefficient as storage_config grows, a dict
+        # will be generated with the id of each component of the storage_config as
+        # its index and the component of storage_config as its value
+        return OrderedDict((d["id"], d) for d in scfg)
+    else:
         raise ValueError("invalid storage config data")
-
-    # Since storage config will often have to be searched for a value by its
-    # id, and this can become very inefficient as storage_config grows, a dict
-    # will be generated with the id of each component of the storage_config as
-    # its index and the component of storage_config as its value
-    return OrderedDict((d["id"], d) for d in scfg)
 
 
 class ProbertParser(object):
@@ -411,14 +405,12 @@ class ProbertParser(object):
 
     def __init__(self, probe_data):
         if not probe_data or not isinstance(probe_data, dict):
-            raise ValueError('Invalid probe_data: %s' % probe_data)
+            raise ValueError(f'Invalid probe_data: {probe_data}')
 
         self.probe_data = probe_data
         if self.probe_data_key is not None:
             if self.probe_data_key in probe_data:
-                data = self.probe_data.get(self.probe_data_key)
-                if not data:
-                    data = {}
+                data = self.probe_data.get(self.probe_data_key) or {}
                 self.class_data = data
             else:
                 LOG.warning('probe_data missing %s data', self.probe_data_key)
@@ -497,15 +489,14 @@ class ProbertParser(object):
 
         for key, val in {'name': name, 'devtype': devtype}.items():
             if not val or val == 'MISSING':
-                msg = 'Failed to extract %s data: %s' % (key, blockdev)
+                msg = f'Failed to extract {key} data: {blockdev}'
                 raise ValueError(msg)
 
-        return "%s-%s" % (devtype, name)
+        return f"{devtype}-{name}"
 
     def blockdev_byid_to_devname(self, link):
         """ Lookup blockdev by devlink and convert to storage_config id. """
-        bd_key = self.lookup_devname(link)
-        if bd_key:
+        if bd_key := self.lookup_devname(link):
             return self.blockdev_to_id(self.blockdev_data[bd_key])
         return None
 
@@ -528,8 +519,7 @@ class BcacheParser(ProbertParser):
         configs = []
         errors = []
         for dev_uuid, bdata in self.backing.items():
-            entry = self.asdict(dev_uuid, bdata)
-            if entry:
+            if entry := self.asdict(dev_uuid, bdata):
                 try:
                     validate_config(entry)
                 except ValueError as e:
@@ -561,7 +551,7 @@ class BcacheParser(ProbertParser):
             return None
 
         def _find_bcache_devname(uuid, backing_data, blockdev_data):
-            by_uuid = '/dev/bcache/by-uuid/' + uuid
+            by_uuid = f'/dev/bcache/by-uuid/{uuid}'
             label = _sb_get(backing_data, 'dev.label')
             for devname, data in blockdev_data.items():
                 if not devname:
@@ -573,15 +563,12 @@ class BcacheParser(ProbertParser):
                         return devname
             if label:
                 return label
-            LOG.warning('Failed to find bcache %s ' % (by_uuid))
+            LOG.warning(f'Failed to find bcache {by_uuid} ')
 
         def _cache_mode(dev_data):
             # "1 [writeback]" -> "writeback"
             attr = _sb_get(dev_data, 'dev.data.cache_mode')
-            if attr:
-                return attr.split()[1][1:-1]
-
-            return None
+            return attr.split()[1][1:-1] if attr else None
 
         if not self.blockdev_data:
             return None
@@ -591,8 +578,12 @@ class BcacheParser(ProbertParser):
         cache_mode = _cache_mode(backing_data)
         bcache_name = os.path.basename(_find_bcache_devname(backing_uuid,
                                        backing_data, self.blockdev_data))
-        bcache_entry = {'type': 'bcache', 'id': 'disk-%s' % bcache_name,
-                        'name': bcache_name}
+        bcache_entry = {
+            'type': 'bcache',
+            'id': f'disk-{bcache_name}',
+            'name': bcache_name,
+        }
+
 
         if cache_mode:
             bcache_entry['cache_mode'] = cache_mode
@@ -622,16 +613,17 @@ class BlockdevParser(ProbertParser):
 
         for devname, data in self.blockdev_data.items():
             # skip composed devices here, except partitions and multipath
-            if data.get('DEVPATH', '').startswith('/devices/virtual/block'):
-                if not self.is_mpath_device(data):
-                    if not self.is_mpath_partition(data):
-                        if data.get('DEVTYPE', '') != "partition":
-                            continue
+            if (
+                data.get('DEVPATH', '').startswith('/devices/virtual/block')
+                and not self.is_mpath_device(data)
+                and not self.is_mpath_partition(data)
+                and data.get('DEVTYPE', '') != "partition"
+            ):
+                continue
             # skip disks that are members of multipath devices
             if self.is_mpath_member(data):
                 continue
-            entry = self.asdict(data)
-            if entry:
+            if entry := self.asdict(data):
                 try:
                     validate_config(entry)
                 except ValueError as e:
@@ -648,7 +640,7 @@ class BlockdevParser(ProbertParser):
             except ValueError:
                 return True
         # accept non-empty (removing whitspace) strings
-        return len(''.join(id_value.split())) > 0
+        return ''.join(id_value.split()) != ""
 
     def get_unique_ids(self, blockdev):
         """ extract preferred ID_* keys for www and serial values.
@@ -670,9 +662,12 @@ class BlockdevParser(ProbertParser):
             }
         for skey, id_keys in source_keys.items():
             for id_key in id_keys:
-                if id_key in blockdev and skey not in uniq:
-                    if self.valid_id(blockdev[id_key]):
-                        uniq[skey] = blockdev[id_key]
+                if (
+                    id_key in blockdev
+                    and skey not in uniq
+                    and self.valid_id(blockdev[id_key])
+                ):
+                    uniq[skey] = blockdev[id_key]
 
         return uniq
 
@@ -685,9 +680,8 @@ class BlockdevParser(ProbertParser):
         if blockdev['DEVTYPE'] != "partition":
             raise ValueError('Invalid blockdev, DEVTYPE is not partition')
 
-        pdevpath = blockdev.get('DEVPATH')
-        if pdevpath:
-            return '/dev/' + os.path.basename(os.path.dirname(pdevpath))
+        if pdevpath := blockdev.get('DEVPATH'):
+            return f'/dev/{os.path.basename(os.path.dirname(pdevpath))}'
 
     def asdict(self, blockdev_data):
         """ process blockdev_data and return a curtin
@@ -724,7 +718,7 @@ class BlockdevParser(ProbertParser):
             # always include path, block_meta will prefer wwn/serial over path
             uniq_ids.update({'path': devname})
             # set wwn, serial, and path
-            entry.update(uniq_ids)
+            entry |= uniq_ids
 
             # disk entry for ECKD dasds needs device_id and check for vtoc
             # ptable
@@ -732,9 +726,9 @@ class BlockdevParser(ProbertParser):
             if dasd_config is not None:
                 dasd_type = dasd_config.get('type', 'ECKD')
                 if dasd_type == 'ECKD':
-                    device_id = (
-                        blockdev_data.get('ID_PATH', '').replace('ccw-', ''))
-                    if device_id:
+                    if device_id := (
+                        blockdev_data.get('ID_PATH', '').replace('ccw-', '')
+                    ):
                         entry['device_id'] = device_id
 
                 if dasd_type in ['ECKD', 'virt']:
@@ -762,8 +756,9 @@ class BlockdevParser(ProbertParser):
                     '/dev/mapper/' + blockdev_data['DM_MPATH'])
                 if parent_devname is None:
                     raise ValueError(
-                        "Cannot find parent mpath device %s for %s" % (
-                            blockdev_data['DM_MPATH'], devname))
+                        f"Cannot find parent mpath device {blockdev_data['DM_MPATH']} for {devname}"
+                    )
+
             else:
                 entry['number'] = int(attrs['partition'])
                 parent_devname = self.partition_parent_devname(blockdev_data)
@@ -777,11 +772,14 @@ class BlockdevParser(ProbertParser):
                     return None
             ptable = parent_blockdev.get('partitiontable')
             if ptable:
-                part = None
-                for pentry in ptable['partitions']:
-                    if self.lookup_devname(pentry['node']) == devname:
-                        part = pentry
-                        break
+                part = next(
+                    (
+                        pentry
+                        for pentry in ptable['partitions']
+                        if self.lookup_devname(pentry['node']) == devname
+                    ),
+                    None,
+                )
 
                 if part is None:
                     raise RuntimeError(
@@ -809,19 +807,15 @@ class BlockdevParser(ProbertParser):
                 ptype_flag = blockdev_data.get('ID_PART_ENTRY_FLAGS')
                 if ptype_flag in [MBR_BOOT_FLAG]:
                     flag_name = 'boot'
-                else:
-                    # logical partitions are not tagged in data, however
-                    # the partition number > 4 (ie, not primary nor extended)
-                    if entry['number'] > 4:
-                        flag_name = 'logical'
+                elif entry['number'] > 4:
+                    flag_name = 'logical'
 
             if flag_name:
                 entry['flag'] = flag_name
 
             # determine parent blockdev and calculate the device id
             if parent_blockdev:
-                device_id = self.blockdev_to_id(parent_blockdev)
-                if device_id:
+                if device_id := self.blockdev_to_id(parent_blockdev):
                     entry['device'] = device_id
 
         return entry
@@ -887,15 +881,14 @@ class FilesystemParser(ProbertParser):
         }
         """
         entry = {
-            'id': 'format-' + volume_id,
+            'id': f'format-{volume_id}',
             'type': 'format',
             'volume': volume_id,
             'fstype': fs_data.get('TYPE'),
         }
-        uuid = fs_data.get('UUID')
-        if uuid:
-            valid_uuid = re.match(schemas._uuid_pattern, uuid)
-            if valid_uuid:
+
+        if uuid := fs_data.get('UUID'):
+            if valid_uuid := re.match(schemas._uuid_pattern, uuid):
                 entry['uuid'] = uuid
 
         return entry
@@ -906,25 +899,28 @@ class LvmParser(ProbertParser):
     probe_data_key = 'lvm'
 
     def lvm_partition_asdict(self, lv_name, lv_config):
-        return {'type': 'lvm_partition',
-                'id': 'lvm-partition-%s' % lv_config['name'],
-                'name': lv_config['name'],
-                'size': lv_config['size'],
-                'volgroup': 'lvm-volgroup-%s' % lv_config['volgroup']}
+        return {
+            'type': 'lvm_partition',
+            'id': f"lvm-partition-{lv_config['name']}",
+            'name': lv_config['name'],
+            'size': lv_config['size'],
+            'volgroup': f"lvm-volgroup-{lv_config['volgroup']}",
+        }
 
     def lvm_volgroup_asdict(self, vg_name, vg_config):
         """ process volgroup probe structure into storage config dict."""
         blockdev_ids = []
         for pvol in vg_config.get('devices', []):
             pvol_bdev = self.lookup_devname(pvol)
-            blockdev_data = self.blockdev_data[pvol_bdev]
-            if blockdev_data:
+            if blockdev_data := self.blockdev_data[pvol_bdev]:
                 blockdev_ids.append(self.blockdev_to_id(blockdev_data))
 
-        return {'type': 'lvm_volgroup',
-                'id': 'lvm-volgroup-%s' % vg_name,
-                'name': vg_name,
-                'devices': sorted(blockdev_ids)}
+        return {
+            'type': 'lvm_volgroup',
+            'id': f'lvm-volgroup-{vg_name}',
+            'name': vg_name,
+            'devices': sorted(blockdev_ids),
+        }
 
     def parse(self):
         """parse probert 'lvm' data format.
@@ -940,8 +936,7 @@ class LvmParser(ProbertParser):
         configs = []
         errors = []
         for vg_name, vg_config in self.class_data['volume_groups'].items():
-            entry = self.lvm_volgroup_asdict(vg_name, vg_config)
-            if entry:
+            if entry := self.lvm_volgroup_asdict(vg_name, vg_config):
                 try:
                     validate_config(entry)
                 except ValueError as e:
@@ -949,8 +944,7 @@ class LvmParser(ProbertParser):
                     continue
                 configs.append(entry)
         for lv_name, lv_config in self.class_data['logical_volumes'].items():
-            entry = self.lvm_partition_asdict(lv_name, lv_config)
-            if entry:
+            if entry := self.lvm_partition_asdict(lv_name, lv_config):
                 try:
                     validate_config(entry)
                 except ValueError as e:
@@ -973,12 +967,14 @@ class DasdParser(ProbertParser):
         blocksize = dasd_config['blocksize']
         disk_layout = dasd_config['disk_layout']
 
-        return {'type': 'dasd',
-                'id': 'dasd-%s' % dasd_name,
-                'device_id': device_id,
-                'blocksize': blocksize,
-                'mode': 'full' if disk_layout == 'not-formatted' else 'quick',
-                'disk_layout': disk_layout}
+        return {
+            'type': 'dasd',
+            'id': f'dasd-{dasd_name}',
+            'device_id': device_id,
+            'blocksize': blocksize,
+            'mode': 'full' if disk_layout == 'not-formatted' else 'quick',
+            'disk_layout': disk_layout,
+        }
 
     def parse(self):
         """parse probert 'dasd' data format.
@@ -989,8 +985,7 @@ class DasdParser(ProbertParser):
         configs = []
         errors = []
         for dasd_name, dasd_config in self.class_data.items():
-            entry = self.asdict(dasd_config)
-            if entry:
+            if entry := self.asdict(dasd_config):
                 try:
                     validate_config(entry)
                 except ValueError as e:
@@ -1014,13 +1009,15 @@ class DmcryptParser(ProbertParser):
         bdev_data = self.blockdev_data[bdev]
         bdev_id = self.blockdev_to_id(bdev_data) if bdev_data else None
         if not bdev_id:
-            raise ValueError('Cannot find blockdev id for %s' % bdev)
+            raise ValueError(f'Cannot find blockdev id for {bdev}')
 
-        return {'type': 'dm_crypt',
-                'id': 'dmcrypt-%s' % crypt_name,
-                'volume': bdev_id,
-                'key': '',
-                'dm_name': crypt_name}
+        return {
+            'type': 'dm_crypt',
+            'id': f'dmcrypt-{crypt_name}',
+            'volume': bdev_id,
+            'key': '',
+            'dm_name': crypt_name,
+        }
 
     def parse(self):
         """parse probert 'dmcrypt' data format.
@@ -1031,8 +1028,7 @@ class DmcryptParser(ProbertParser):
         configs = []
         errors = []
         for crypt_name, crypt_config in self.class_data.items():
-            entry = self.asdict(crypt_config)
-            if entry:
+            if entry := self.asdict(crypt_config):
                 try:
                     validate_config(entry)
                 except ValueError as e:
@@ -1082,8 +1078,7 @@ class RaidParser(ProbertParser):
         configs = []
         errors = []
         for devname, data in self.class_data.items():
-            entry = self.asdict(data)
-            if entry:
+            if entry := self.asdict(data):
                 try:
                     validate_config(entry)
                 except ValueError as e:
@@ -1114,10 +1109,12 @@ class MountParser(ProbertParser):
             return {}
 
         source_id = self.blockdev_to_id(self.blockdev_data[source])
-        return {'type': 'mount',
-                'id': 'mount-%s' % source_id,
-                'path': mdata.get('target'),
-                'device': 'format-%s' % source_id}
+        return {
+            'type': 'mount',
+            'id': f'mount-{source_id}',
+            'path': mdata.get('target'),
+            'device': f'format-{source_id}',
+        }
 
     def parse(self):
         """parse probert 'mount' data format
@@ -1159,12 +1156,11 @@ class ZfsParser(ProbertParser):
         if 'properties' not in dataset:
             return {}
 
-        set_props = {}
-        for prop_name, setting in dataset['properties'].items():
-            if setting['source'] == 'local':
-                set_props[prop_name] = setting['value']
-
-        return set_props
+        return {
+            prop_name: setting['value']
+            for prop_name, setting in dataset['properties'].items()
+            if setting['source'] == 'local'
+        }
 
     def zpool_asdict(self, name, zpool_data):
         """ convert zpool data and convert to curtin storage_config dict.
@@ -1175,16 +1171,13 @@ class ZfsParser(ProbertParser):
             if not child_name.startswith('children'):
                 continue
             path = child_config.get('path')
-            devname = self.blockdev_byid_to_devname(path)
-            # skip any zpools not backed by blockdevices
-            if not devname:
-                continue
-            vdevs.append(devname)
+            if devname := self.blockdev_byid_to_devname(path):
+                vdevs.append(devname)
 
-        if len(vdevs) == 0:
+        if not vdevs:
             return None
 
-        id_name = 'zpool-%s-%s' % (os.path.basename(vdevs[0]), name)
+        id_name = f'zpool-{os.path.basename(vdevs[0])}-{name}'
         return {'type': 'zpool',
                 'id': id_name,
                 'pool': name,
@@ -1195,7 +1188,7 @@ class ZfsParser(ProbertParser):
         if '/' not in ds_name or not zpool_data:
             return
 
-        id_name = 'zfs-%s' % ds_name.replace('/', '-')
+        id_name = f"zfs-{ds_name.replace('/', '-')}"
         parent_zpool_name = zpool_data.get('pool')
         return {'type': 'zfs',
                 'id': id_name,
@@ -1247,8 +1240,7 @@ class ZfsParser(ProbertParser):
             datasets = zp_data.get('datasets')
             for ds in datasets.keys():
                 ds_props = self.get_local_ds_properties(datasets[ds])
-                zfs_entry = self.zfs_asdict(ds, ds_props, zpool_entry)
-                if zfs_entry:
+                if zfs_entry := self.zfs_asdict(ds, ds_props, zpool_entry):
                     try:
                         validate_config(zfs_entry)
                     except ValueError as e:
@@ -1266,7 +1258,7 @@ def ptable_uuid_to_flag_entry(guid):
     name = code = None
     # prefix non-uuid guid values with 0x
     if guid and '-' not in guid and not guid.upper().startswith('0X'):
-        guid = '0x' + guid
+        guid = f'0x{guid}'
     if guid and guid.upper() in PTABLE_TYPE_MAP:
         name, code = PTABLE_TYPE_MAP[guid.upper()]
 
@@ -1326,7 +1318,7 @@ def extract_storage_config(probe_data, strict=False):
 
     for e in errors:
         LOG.exception('Validation error: %s\n' % e)
-    if len(errors) > 0:
+    if errors:
         errmsg = "Extract storage config does not validate."
         LOG.warning(errmsg)
         if strict:

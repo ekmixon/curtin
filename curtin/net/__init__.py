@@ -251,13 +251,15 @@ def parse_net_config_data(net_config):
     :param net_config: curtin network config dict
     """
     state = None
-    if 'version' in net_config and 'config' in net_config:
-        # For disabled config, we will not return any network state
-        if net_config["config"] != "disabled":
-            ns = network_state.NetworkState(version=net_config.get('version'),
-                                            config=net_config.get('config'))
-            ns.parse_config()
-            state = ns.network_state
+    if (
+        'version' in net_config
+        and 'config' in net_config
+        and net_config["config"] != "disabled"
+    ):
+        ns = network_state.NetworkState(version=net_config.get('version'),
+                                        config=net_config.get('config'))
+        ns.parse_config()
+        state = ns.network_state
 
     return state
 
@@ -265,12 +267,12 @@ def parse_net_config_data(net_config):
 def parse_net_config(path):
     """Parses a curtin network configuration file and
        return network state"""
-    ns = None
     net_config = config.load_config(path)
-    if 'network' in net_config:
-        ns = parse_net_config_data(net_config.get('network'))
-
-    return ns
+    return (
+        parse_net_config_data(net_config.get('network'))
+        if 'network' in net_config
+        else None
+    )
 
 
 def render_persistent_net(network_state):
@@ -311,7 +313,7 @@ def iface_add_subnet(iface, subnet):
                 value = " ".join(value)
             if '_' in key:
                 key = key.replace('_', '-')
-            content += "    {} {}\n".format(key, value)
+            content += f"    {key} {value}\n"
 
     return content
 
@@ -379,8 +381,8 @@ def render_route(route, indent=""):
              how-to-set-static-routes-in-ubuntu-server
     """
     content = []
-    up = indent + "post-up route add"
-    down = indent + "pre-down route del"
+    up = f"{indent}post-up route add"
+    down = f"{indent}pre-down route del"
     or_true = " || true"
     mapping = {
         'network': '-net',
@@ -389,21 +391,20 @@ def render_route(route, indent=""):
         'metric': 'metric',
     }
     if route['network'] == '0.0.0.0' and route['netmask'] == '0.0.0.0':
-        default_gw = " default gw %s" % route['gateway']
-        content.append(up + default_gw + or_true)
-        content.append(down + default_gw + or_true)
+        default_gw = f" default gw {route['gateway']}"
+        content.extend((up + default_gw + or_true, down + default_gw + or_true))
     elif route['network'] == '::' and route['netmask'] == 0:
         # ipv6!
-        default_gw = " -A inet6 default gw %s" % route['gateway']
-        content.append(up + default_gw + or_true)
-        content.append(down + default_gw + or_true)
+        default_gw = f" -A inet6 default gw {route['gateway']}"
+        content.extend((up + default_gw + or_true, down + default_gw + or_true))
     else:
-        route_line = ""
-        for k in ['network', 'netmask', 'gateway', 'metric']:
-            if k in route:
-                route_line += " %s %s" % (mapping[k], route[k])
-        content.append(up + route_line + or_true)
-        content.append(down + route_line + or_true)
+        route_line = "".join(
+            f" {mapping[k]} {route[k]}"
+            for k in ['network', 'netmask', 'gateway', 'metric']
+            if k in route
+        )
+
+        content.extend((up + route_line + or_true, down + route_line + or_true))
     return "\n".join(content) + "\n"
 
 
@@ -414,9 +415,9 @@ def iface_start_entry(iface):
     if control == "auto":
         cverb = "auto"
     elif control in ("hotplug",):
-        cverb = "allow-" + control
+        cverb = f"allow-{control}"
     else:
-        cverb = "# control-" + control
+        cverb = f"# control-{control}"
 
     subst = iface.copy()
     subst.update({'fullname': fullname, 'cverb': cverb})
@@ -438,7 +439,6 @@ def subnet_is_ipv6(subnet):
 def render_interfaces(network_state):
     ''' Given state, emit etc/network/interfaces content '''
 
-    content = ""
     interfaces = network_state.get('interfaces')
     ''' Apply a sort order to ensure that we write out
         the physical interfaces first; this is critical for
@@ -450,18 +450,17 @@ def render_interfaces(network_state):
         'bridge': 2,
         'vlan': 3,
     }
-    content += "auto lo\niface lo inet loopback\n"
+    content = "" + "auto lo\niface lo inet loopback\n"
     for dnskey, value in network_state.get('dns', {}).items():
         if len(value):
-            content += "    dns-{} {}\n".format(dnskey, " ".join(value))
+            content += f'    dns-{dnskey} {" ".join(value)}\n'
 
     for iface in sorted(interfaces.values(),
                         key=lambda k: (order[k['type']], k['name'])):
 
         if content[-2:] != "\n\n":
             content += "\n"
-        subnets = iface.get('subnets', {})
-        if subnets:
+        if subnets := iface.get('subnets', {}):
             for index, subnet in enumerate(subnets):
                 if content[-2:] != "\n\n":
                     content += "\n"
@@ -557,15 +556,15 @@ def render_network_state(target, network_state):
     cc = 'etc/cloud/cloud.cfg.d/curtin-disable-cloudinit-networking.cfg'
 
     eni = os.path.sep.join((target, eni,))
-    LOG.info('Writing ' + eni)
+    LOG.info(f'Writing {eni}')
     util.write_file(eni, content=render_interfaces(network_state))
 
     netrules = os.path.sep.join((target, netrules,))
-    LOG.info('Writing ' + netrules)
+    LOG.info(f'Writing {netrules}')
     util.write_file(netrules, content=render_persistent_net(network_state))
 
     cc_disable = os.path.sep.join((target, cc,))
-    LOG.info('Writing ' + cc_disable)
+    LOG.info(f'Writing {cc_disable}')
     util.write_file(cc_disable, content='network: {config: disabled}\n')
 
 

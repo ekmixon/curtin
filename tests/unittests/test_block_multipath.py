@@ -87,7 +87,7 @@ class TestMultipath(CiTestCase):
 
     def test_is_mpath_partition_true(self):
         """is_mpath_partition returns true if udev info contains right keys."""
-        dm_device = "/dev/dm-" + self.random_string()
+        dm_device = f"/dev/dm-{self.random_string()}"
         self.m_udev.udevadm_info.return_value = {
             'DM_PART': '1',
             'DM_MPATH': 'a',
@@ -150,7 +150,7 @@ class TestMultipath(CiTestCase):
     def test_remove_map(self, m_wait, m_exists):
         """multipath.remove_map runs multipath -f skips wait if map gone."""
         map_id = self.random_string()
-        devpath = '/dev/mapper/%s' % map_id
+        devpath = f'/dev/mapper/{map_id}'
         m_exists.side_effect = iter([True, True, False])
         multipath.remove_map(devpath)
         expected = mock.call(
@@ -164,7 +164,7 @@ class TestMultipath(CiTestCase):
     def test_remove_map_wait(self, m_wait, m_exists):
         """multipath.remove_map runs multipath -f  wait if map remains."""
         map_id = self.random_string()
-        devpath = '/dev/mapper/%s' % map_id
+        devpath = f'/dev/mapper/{map_id}'
         m_exists.side_effect = iter([True, True, True])
         multipath.remove_map(devpath, retries=3)
         expected = mock.call(
@@ -249,8 +249,7 @@ class TestMultipath(CiTestCase):
            member.
         """
         mp_id = 'mpatha'
-        paths = ['device=bar multipath=%s' % mp_id,
-                 'device=wark multipath=%s' % mp_id]
+        paths = [f'device=bar multipath={mp_id}', f'device=wark multipath={mp_id}']
         self.m_subp.return_value = ("\n".join(paths), "")
         self.assertIsNone(multipath.find_mpath_id_by_path('/dev/xxx'))
 

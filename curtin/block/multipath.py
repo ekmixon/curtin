@@ -52,24 +52,18 @@ def dmname_to_blkdev_mapping():
 
 def is_mpath_device(devpath, info=None):
     """ Check if devpath is a multipath device, returns boolean. """
-    result = False
     if not info:
         info = udev.udevadm_info(devpath)
-    if info.get('DM_UUID', '').startswith('mpath-'):
-        result = True
-
+    result = bool(info.get('DM_UUID', '').startswith('mpath-'))
     LOG.debug('%s is multipath device? %s', devpath, result)
     return result
 
 
 def is_mpath_member(devpath, info=None):
     """ Check if a device is a multipath member (a path), returns boolean. """
-    result = False
     if not info:
         info = udev.udevadm_info(devpath)
-    if info.get("DM_MULTIPATH_DEVICE_PATH") == "1":
-        result = True
-
+    result = info.get("DM_MULTIPATH_DEVICE_PATH") == "1"
     LOG.debug('%s is multipath device member? %s', devpath, result)
     return result
 
@@ -99,7 +93,7 @@ def mpath_partition_to_mpath_id_and_partnumber(devpath):
 def remove_partition(devpath, retries=10):
     """ Remove a multipath partition mapping. """
     LOG.debug('multipath: removing multipath partition: %s', devpath)
-    for _ in range(0, retries):
+    for _ in range(retries):
         util.subp(['dmsetup', 'remove', '--force', '--retry', devpath])
         udev.udevadm_settle()
         if not os.path.exists(devpath):
@@ -111,8 +105,8 @@ def remove_partition(devpath, retries=10):
 def remove_map(map_id, retries=10):
     """ Remove a multipath device mapping. """
     LOG.debug('multipath: removing multipath map: %s', map_id)
-    devpath = '/dev/mapper/%s' % map_id
-    for _ in range(0, retries):
+    devpath = f'/dev/mapper/{map_id}'
+    for _ in range(retries):
         util.subp(['multipath', '-v3', '-R3', '-f', map_id], rcs=[0, 1])
         udev.udevadm_settle()
         if not os.path.exists(devpath):
@@ -125,17 +119,18 @@ def find_mpath_members(multipath_id, paths=None):
     """ Return a list of device path for each member of aspecified mpath_id."""
     if not paths:
         paths = show_paths()
-        for retry in range(0, 5):
+        for _ in range(5):
             orphans = [path for path in paths if 'orphan' in path['multipath']]
-            if len(orphans):
-                udev.udevadm_settle()
-                paths = show_paths()
-            else:
+            if not len(orphans):
                 break
 
-    members = ['/dev/' + path['device']
-               for path in paths if path['multipath'] == multipath_id]
-    return members
+            udev.udevadm_settle()
+            paths = show_paths()
+    return [
+        '/dev/' + path['device']
+        for path in paths
+        if path['multipath'] == multipath_id
+    ]
 
 
 def find_mpath_id(devpath):
@@ -153,11 +148,14 @@ def find_mpath_id_by_path(devpath, paths=None):
         raise ValueError('find_mpath_id_by_path does not handle '
                          'device-mapper devices: %s' % devpath)
 
-    for path in paths:
-        if devpath == '/dev/' + path['device']:
-            return path['multipath']
-
-    return None
+    return next(
+        (
+            path['multipath']
+            for path in paths
+            if devpath == '/dev/' + path['device']
+        ),
+        None,
+    )
 
 
 def find_mpath_id_by_parent(multipath_id, partnum=None):
@@ -180,10 +178,13 @@ def find_mpath_partitions(mpath_id):
     #  'mpatha-part2': '/dev/dm-4',
     #  'mpathb': '/dev/dm-12'}
     if not mpath_id:
-        raise ValueError('Invalid mpath_id parameter: %s' % mpath_id)
+        raise ValueError(f'Invalid mpath_id parameter: {mpath_id}')
 
-    return (mp_id for (mp_id, _dm_dev) in dmname_to_blkdev_mapping().items()
-            if mp_id.startswith(mpath_id + '-'))
+    return (
+        mp_id
+        for (mp_id, _dm_dev) in dmname_to_blkdev_mapping().items()
+        if mp_id.startswith(f'{mpath_id}-')
+    )
 
 
 def get_mpath_id_from_device(device):
@@ -192,10 +193,7 @@ def get_mpath_id_from_device(device):
         info = udev.udevadm_info(device)
         return info.get('DM_NAME')
     # /dev/sdX
-    if is_mpath_member(device):
-        return find_mpath_id_by_path(device)
-
-    return None
+    return find_mpath_id_by_path(device) if is_mpath_member(device) else None
 
 
 def force_devmapper_symlinks():
@@ -204,7 +202,7 @@ def force_devmapper_symlinks():
     needs_trigger = []
     for mp_id, dm_dev in dmname_to_blkdev_mapping().items():
         if mp_id.startswith('mpath'):
-            mapper_path = '/dev/mapper/' + mp_id
+            mapper_path = f'/dev/mapper/{mp_id}'
             if not os.path.islink(mapper_path):
                 LOG.warning(
                     'Found invalid device mapper mp path: %s, removing',
@@ -216,9 +214,16 @@ def force_devmapper_symlinks():
         for (mapper_path, dm_dev) in needs_trigger:
             LOG.debug('multipath: regenerating symlink for %s (%s)',
                       mapper_path, dm_dev)
-            util.subp(['udevadm', 'trigger', '--subsystem-match=block',
-                       '--action=add',
-                       '/sys/class/block/' + os.path.basename(dm_dev)])
+            util.subp(
+                [
+                    'udevadm',
+                    'trigger',
+                    '--subsystem-match=block',
+                    '--action=add',
+                    f'/sys/class/block/{os.path.basename(dm_dev)}',
+                ]
+            )
+
             udev.udevadm_settle(exists=mapper_path)
             if not os.path.islink(mapper_path):
                 LOG.error('Failed to regenerate udev symlink %s', mapper_path)
@@ -243,10 +248,9 @@ def multipath_assert_supported():
     returns: True if system supports multipath
     raises: RuntimeError: if system does not support multipath
     """
-    missing_progs = [p for p in ('multipath', 'multipathd')
-                     if not util.which(p)]
-    if missing_progs:
-        raise RuntimeError(
-            "Missing multipath utils: %s" % ','.join(missing_progs))
+    if missing_progs := [
+        p for p in ('multipath', 'multipathd') if not util.which(p)
+    ]:
+        raise RuntimeError(f"Missing multipath utils: {','.join(missing_progs)}")
 
 # vi: ts=4 expandtab syntax=python

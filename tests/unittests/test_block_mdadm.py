@@ -119,18 +119,24 @@ class TestBlockMdadmCreate(CiTestCase):
 
         side_effects.append(("", ""))  # mdadm create
         # build command how mdadm_create does
-        cmd = (["mdadm", "--create", md_devname, "--run",
-                "--homehost=%s" % hostname,
-                "--raid-devices=%s" % (len(devices) if not container else 4)])
+        cmd = [
+            "mdadm",
+            "--create",
+            md_devname,
+            "--run",
+            f"--homehost={hostname}",
+            f"--raid-devices={4 if container else len(devices)}",
+        ]
+
         if not container:
-            cmd += ["--metadata=%s" % metadata]
+            cmd += [f"--metadata={metadata}"]
         if raidlevel != 'container':
-            cmd += ["--level=%s" % raidlevel]
+            cmd += [f"--level={raidlevel}"]
         if container:
             cmd += [container]
         cmd += devices
         if spares:
-            cmd += ["--spare-devices=%s" % len(spares)] + spares
+            cmd += [f"--spare-devices={len(spares)}"] + spares
 
         expected_calls.append(call(cmd, capture=True))
         side_effects.append(("", ""))  # udevadm control --start-exec-queue
@@ -453,7 +459,7 @@ class TestBlockMdadmStop(CiTestCase):
         ])
 
     def _set_sys_path(self, md_device):
-        self.sys_path = '/sys/class/block/%s/md' % md_device.split("/")[-1]
+        self.sys_path = f'/sys/class/block/{md_device.split("/")[-1]}/md'
         self.mock_sys_block_path.return_value = self.sys_path
 
     def test_mdadm_stop_no_devpath(self):
@@ -472,9 +478,10 @@ class TestBlockMdadmStop(CiTestCase):
         self.mock_util_subp.assert_has_calls(expected_calls)
 
         expected_reads = [
-            call(self.sys_path + '/sync_action'),
-            call(self.sys_path + '/sync_max'),
+            call(f'{self.sys_path}/sync_action'),
+            call(f'{self.sys_path}/sync_max'),
         ]
+
         self.mock_util_load_file.assert_has_calls(expected_reads)
 
     @patch('curtin.block.mdadm.time.sleep')
@@ -486,10 +493,10 @@ class TestBlockMdadmStop(CiTestCase):
             "proc/mdstat output",
             "idle", "0",
         ])
-        self.mock_util_subp.side_effect = iter([
-            util.ProcessExecutionError(),
-            ("mdadm stopped %s" % device, ''),
-        ])
+        self.mock_util_subp.side_effect = iter(
+            [util.ProcessExecutionError(), (f"mdadm stopped {device}", '')]
+        )
+
 
         mdadm.mdadm_stop(device)
 
@@ -500,19 +507,21 @@ class TestBlockMdadmStop(CiTestCase):
         self.mock_util_subp.assert_has_calls(expected_calls)
 
         expected_reads = [
-            call(self.sys_path + '/sync_action'),
-            call(self.sys_path + '/sync_max'),
+            call(f'{self.sys_path}/sync_action'),
+            call(f'{self.sys_path}/sync_max'),
             call('/proc/mdstat'),
-            call(self.sys_path + '/sync_action'),
-            call(self.sys_path + '/sync_max'),
+            call(f'{self.sys_path}/sync_action'),
+            call(f'{self.sys_path}/sync_max'),
         ]
+
         self.mock_util_load_file.assert_has_calls(expected_reads)
 
         expected_writes = [
-            call(self.sys_path + '/sync_action', content='idle'),
-            call(self.sys_path + '/sync_max', content='0'),
-            call(self.sys_path + '/sync_min', content='0'),
+            call(f'{self.sys_path}/sync_action', content='idle'),
+            call(f'{self.sys_path}/sync_max', content='0'),
+            call(f'{self.sys_path}/sync_min', content='0'),
         ]
+
         self.mock_util_write_file.assert_has_calls(expected_writes)
 
     @patch('curtin.block.mdadm.time.sleep')
@@ -524,10 +533,10 @@ class TestBlockMdadmStop(CiTestCase):
             "proc/mdstat output",
             "idle", "0",
         ])
-        self.mock_util_subp.side_effect = iter([
-            util.ProcessExecutionError(),
-            ("mdadm stopped %s" % device, ''),
-        ])
+        self.mock_util_subp.side_effect = iter(
+            [util.ProcessExecutionError(), (f"mdadm stopped {device}", '')]
+        )
+
         # sometimes we fail to modify sysfs attrs
         self.mock_util_write_file.side_effect = iter([
             "",         # write to sync_action OK
@@ -543,17 +552,16 @@ class TestBlockMdadmStop(CiTestCase):
         self.mock_util_subp.assert_has_calls(expected_calls)
 
         expected_reads = [
-            call(self.sys_path + '/sync_action'),
-            call(self.sys_path + '/sync_max'),
+            call(f'{self.sys_path}/sync_action'),
+            call(f'{self.sys_path}/sync_max'),
             call('/proc/mdstat'),
-            call(self.sys_path + '/sync_action'),
-            call(self.sys_path + '/sync_max'),
+            call(f'{self.sys_path}/sync_action'),
+            call(f'{self.sys_path}/sync_max'),
         ]
+
         self.mock_util_load_file.assert_has_calls(expected_reads)
 
-        expected_writes = [
-            call(self.sys_path + '/sync_action', content='idle'),
-        ]
+        expected_writes = [call(f'{self.sys_path}/sync_action', content='idle')]
         self.mock_util_write_file.assert_has_calls(expected_writes)
 
     @patch('curtin.block.mdadm.time.sleep')
@@ -581,16 +589,18 @@ class TestBlockMdadmStop(CiTestCase):
         self.mock_util_subp.assert_has_calls(expected_calls)
 
         expected_reads = [
-            call(self.sys_path + '/sync_action'),
-            call(self.sys_path + '/sync_max'),
+            call(f'{self.sys_path}/sync_action'),
+            call(f'{self.sys_path}/sync_max'),
             call('/proc/mdstat'),
         ] * retries
+
         self.mock_util_load_file.assert_has_calls(expected_reads)
 
         expected_writes = [
-            call(self.sys_path + '/sync_action', content='idle'),
-            call(self.sys_path + '/sync_max', content='0'),
+            call(f'{self.sys_path}/sync_action', content='idle'),
+            call(f'{self.sys_path}/sync_max', content='0'),
         ] * retries
+
         self.mock_util_write_file.assert_has_calls(expected_writes)
 
 
@@ -776,8 +786,7 @@ class TestBlockMdadmMdHelpers(CiTestCase):
     def test_md_sysfs_attr(self, mock_isfile, mock_sysblock):
         mdname = "/dev/md0"
         attr_name = 'array_state'
-        sysfs_path = '/sys/class/block/{}/md/{}'.format(dev_short(mdname),
-                                                        attr_name)
+        sysfs_path = f'/sys/class/block/{dev_short(mdname)}/md/{attr_name}'
         mock_sysblock.side_effect = ['/sys/class/block/md0/md']
         mock_isfile.side_effect = [True]
         mdadm.md_sysfs_attr(mdname, attr_name)
@@ -886,10 +895,7 @@ class TestBlockMdadmMdHelpers(CiTestCase):
 
         sysfs_path = '/sys/class/block/md0/md/'
 
-        expected_calls = []
-        for d in devices:
-            expected_calls.append(call(os.path.join(sysfs_path, d, 'state')))
-
+        expected_calls = [call(os.path.join(sysfs_path, d, 'state')) for d in devices]
         spares = mdadm.md_get_spares_list(mdname)
         mock_load_file.assert_has_calls(expected_calls)
         self.assertEqual(['/dev/vdc'], spares)
@@ -920,10 +926,7 @@ class TestBlockMdadmMdHelpers(CiTestCase):
 
         sysfs_path = '/sys/class/block/md0/md/'
 
-        expected_calls = []
-        for d in devices:
-            expected_calls.append(call(os.path.join(sysfs_path, d, 'state')))
-
+        expected_calls = [call(os.path.join(sysfs_path, d, 'state')) for d in devices]
         devs = mdadm.md_get_devices_list(mdname)
         mock_load_file.assert_has_calls(expected_calls)
         self.assertEqual(sorted(['/dev/vda', '/dev/vdb']), sorted(devs))
@@ -971,7 +974,7 @@ class TestBlockMdadmMdHelpers(CiTestCase):
     def test_md_check_raid_level(self):
         for rl in mdadm.VALID_RAID_LEVELS:
             if isinstance(rl, int) or len(rl) <= 2:
-                el = 'raid%s' % (rl,)
+                el = f'raid{rl}'
             elif rl == 'stripe':
                 el = 'raid0'
             elif rl == 'mirror':
@@ -1149,10 +1152,7 @@ class TestBlockMdadmMdHelpers(CiTestCase):
         mock_query.return_value = md_dict
         mock_uuid.return_value = md_uuid
         mock_examine.side_effect = [md_dict] * len(devices)
-        expected_calls = []
-        for dev in devices:
-            expected_calls.append(call(dev, export=True))
-
+        expected_calls = [call(dev, export=True) for dev in devices]
         rv = mdadm.md_check_array_membership(mdname, devices)
 
         self.assertEqual(rv, None)
@@ -1337,7 +1337,7 @@ class TestBlockMdadmMdHelpers(CiTestCase):
         mock_spare.return_value = None
         mock_member.return_value = None
         container_name = self.random_string()
-        detail = {'MD_CONTAINER': container_name + '1'}
+        detail = {'MD_CONTAINER': f'{container_name}1'}
 
         mock_detail.return_value = detail
 
@@ -1409,8 +1409,7 @@ class TestBlockMdadmMdHelpers(CiTestCase):
 
         md_is_present = mdadm.md_present(mdname)
 
-        self.assertFalse(md_is_present,
-                         "%s mistakenly matched %s" % (mdname, found_mdname))
+        self.assertFalse(md_is_present, f"{mdname} mistakenly matched {found_mdname}")
         self.mock_util.load_file.assert_called_with('/proc/mdstat')
 
     def test_md_present_with_dev_path(self):
@@ -1528,8 +1527,11 @@ class TestBlockMdadmZeroDevice(CiTestCase):
         examine = {'version': version}
         if version in ['1.2', '1.1']:
             templ = "%s sectors" if sectors else "%s bytes"
-            examine.update({'super_offset': templ % super_off,
-                            'data_offset': templ % data_off})
+            examine |= {
+                'super_offset': templ % super_off,
+                'data_offset': templ % data_off,
+            }
+
         return examine
 
     def test_zero_device(self):

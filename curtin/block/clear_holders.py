@@ -71,10 +71,8 @@ def shutdown_bcache(device):
     # is to wait for approximately 30 seconds but to check
     # frequently since curtin cannot proceed until devices
     # cleared.
-    bcache_shutdown_message = ('shutdown_bcache running on {} has determined '
-                               'that the device has already been shut down '
-                               'during handling of another bcache dev. '
-                               'skipping'.format(device))
+    bcache_shutdown_message = f'shutdown_bcache running on {device} has determined that the device has already been shut down during handling of another bcache dev. skipping'
+
 
     if not os.path.exists(device):
         LOG.info(bcache_shutdown_message)
@@ -126,8 +124,8 @@ def shutdown_lvm(device):
     name_file = os.path.join(device, 'dm', 'name')
     lvm_name = util.load_file(name_file).strip()
     (vg_name, lv_name) = lvm.split_lvm_name(lvm_name)
-    vg_lv_name = "%s/%s" % (vg_name, lv_name)
-    devname = "/dev/" + vg_lv_name
+    vg_lv_name = f"{vg_name}/{lv_name}"
+    devname = f"/dev/{vg_lv_name}"
 
     # wipe contents of the logical volume first
     LOG.info('Wiping lvm logical volume: %s', devname)
@@ -199,12 +197,10 @@ def shutdown_mdadm(device):
             mdadm.remove_device(blockdev, mddev)
         except util.ProcessExecutionError as e:
             LOG.debug('Non-fatal error clearing raid array: %s', e.stderr)
-            pass
-
     LOG.debug('using mdadm.mdadm_stop on dev: %s', blockdev)
     mdadm.mdadm_stop(blockdev)
 
-    LOG.debug('Wiping mdadm member devices: %s' % md_devs)
+    LOG.debug(f'Wiping mdadm member devices: {md_devs}')
     for mddev in md_devs:
         mdadm.zero_device(mddev, force=True)
 
@@ -246,19 +242,18 @@ def wipe_superblock(device):
                      " '%s'", blockdev)
             return
     except OSError as e:
-        if util.is_file_not_found_exc(e):
-            LOG.debug('Device to wipe disappeared: %s', e)
-            LOG.debug('/proc/partitions says: %s',
-                      util.load_file('/proc/partitions'))
-
-            (parent, partnum) = block.get_blockdev_for_partition(blockdev)
-            out, _e = util.subp(['sfdisk', '-d', parent],
-                                capture=True, combine_capture=True)
-            LOG.debug('Disk partition info:\n%s', out)
-            return
-        else:
+        if not util.is_file_not_found_exc(e):
             raise e
 
+        LOG.debug('Device to wipe disappeared: %s', e)
+        LOG.debug('/proc/partitions says: %s',
+                  util.load_file('/proc/partitions'))
+
+        (parent, partnum) = block.get_blockdev_for_partition(blockdev)
+        out, _e = util.subp(['sfdisk', '-d', parent],
+                            capture=True, combine_capture=True)
+        LOG.debug('Disk partition info:\n%s', out)
+        return
     # gather any partitions
     partitions = block.get_sysfs_partitions(device)
 
@@ -348,11 +343,10 @@ def _wipe_superblock(blockdev, exclusive=True):
         except OSError:
             if attempt + 1 >= len(retries):
                 raise
-            else:
-                LOG.debug("wiping device '%s' failed on attempt"
-                          " %s/%s.  sleeping %ss before retry",
-                          blockdev, attempt + 1, len(retries), wait)
-                time.sleep(wait)
+            LOG.debug("wiping device '%s' failed on attempt"
+                      " %s/%s.  sleeping %ss before retry",
+                      blockdev, attempt + 1, len(retries), wait)
+            time.sleep(wait)
 
 
 def identify_lvm(device):
@@ -400,10 +394,7 @@ def identify_partition(device):
         return True
 
     blockdev = block.sysfs_to_devpath(device)
-    if multipath.is_mpath_partition(blockdev):
-        return True
-
-    return False
+    return bool(multipath.is_mpath_partition(blockdev))
 
 
 def shutdown_swap(path):
@@ -596,8 +587,9 @@ def assert_clear(base_paths):
                          for p in base_paths if os.path.exists(p)]:
         if any(holder_type not in valid and path not in base_paths
                for (holder_type, path) in get_holder_types(holders_tree)):
-            raise OSError('Storage not clear, remaining:\n{}'
-                          .format(format_holders_tree(holders_tree)))
+            raise OSError(
+                f'Storage not clear, remaining:\n{format_holders_tree(holders_tree)}'
+            )
 
 
 def clear_holders(base_paths, try_preserve=False):
@@ -664,7 +656,7 @@ def start_clear_holders_deps():
                      if os.path.basename(md) in line]
             # in some cases we have a /dev/md0 device node
             # but the kernel has already renamed the device /dev/md127
-            if len(found) == 0:
+            if not found:
                 LOG.debug('Ignoring md device %s, not present in mdstat', md)
                 continue
 

@@ -44,7 +44,7 @@ def get_grub_package_name(target_arch, uefi, rhel_ver=None):
         return ('grub-ieee1275', 'powerpc-ieee1275')
     if uefi:
         if target_arch == 'amd64':
-            grub_name = 'grub-efi-%s' % target_arch
+            grub_name = f'grub-efi-{target_arch}'
             grub_target = "x86_64-efi"
         elif target_arch == 'x86_64':
             # centos 7+, no centos6 support
@@ -57,7 +57,7 @@ def get_grub_package_name(target_arch, uefi, rhel_ver=None):
             grub_name = "grub2-efi-aa64"
             grub_target = "arm64-efi"
         elif target_arch == 'arm64':
-            grub_name = 'grub-efi-%s' % target_arch
+            grub_name = f'grub-efi-{target_arch}'
             grub_target = "arm64-efi"
         elif target_arch == 'i386':
             grub_name = 'grub-efi-ia32'
@@ -66,7 +66,7 @@ def get_grub_package_name(target_arch, uefi, rhel_ver=None):
             grub_name = 'grub-efi-riscv64'
             grub_target = 'riscv64-efi'
         else:
-            raise ValueError('Unsupported UEFI arch: %s' % target_arch)
+            raise ValueError(f'Unsupported UEFI arch: {target_arch}')
     else:
         grub_target = 'i386-pc'
         if target_arch in ['i386', 'amd64']:
@@ -79,7 +79,7 @@ def get_grub_package_name(target_arch, uefi, rhel_ver=None):
             else:
                 raise ValueError('Unsupported RHEL version: %s', rhel_ver)
         else:
-            raise ValueError('Unsupported arch: %s' % target_arch)
+            raise ValueError(f'Unsupported arch: {target_arch}')
 
     return (grub_name, grub_target)
 
@@ -112,7 +112,7 @@ def prepare_grub_dir(target, grub_cfg):
 
     if os.path.exists(ci_cfg):
         LOG.debug('grub: moved %s out of the way', ci_cfg)
-        shutil.move(ci_cfg, ci_cfg + '.disabled')
+        shutil.move(ci_cfg, f'{ci_cfg}.disabled')
 
 
 def get_carryover_params(distroinfo):
@@ -125,7 +125,7 @@ def get_carryover_params(distroinfo):
     legacy_sep = '--'
 
     def wrap(sep):
-        return ' ' + sep + ' '
+        return f' {sep} '
 
     sections = []
     if wrap(preferred_sep) in cmdline:
@@ -169,9 +169,9 @@ def replace_grub_cmdline_linux_default(target, new_args):
     content = ""
     if os.path.exists(target_grubconf):
         content = util.load_file(target_grubconf)
-    existing = re.search(
-        r'GRUB_CMDLINE_LINUX_DEFAULT=.*', content, re.MULTILINE)
-    if existing:
+    if existing := re.search(
+        r'GRUB_CMDLINE_LINUX_DEFAULT=.*', content, re.MULTILINE
+    ):
         omode = 'w+'
         updated_content = content[:existing.start()]
         updated_content += newcontent
@@ -185,9 +185,9 @@ def replace_grub_cmdline_linux_default(target, new_args):
 
 
 def write_grub_config(target, grubcfg, grub_conf, new_params):
-    replace_default = config.value_as_boolean(
-        grubcfg.get('replace_linux_default', True))
-    if replace_default:
+    if replace_default := config.value_as_boolean(
+        grubcfg.get('replace_linux_default', True)
+    ):
         replace_grub_cmdline_linux_default(target, new_params)
 
     probe_os = config.value_as_boolean(
@@ -206,7 +206,7 @@ def write_grub_config(target, grubcfg, grub_conf, new_params):
     if not isinstance(grub_terminal, str):
         raise ValueError("Unexpected value %s for 'terminal'. "
                          "Value must be a string" % grub_terminal)
-    if not grub_terminal.lower() == "unmodified":
+    if grub_terminal.lower() != "unmodified":
         terminal_content = [
             '# Curtin configured GRUB_TERMINAL value',
             'GRUB_TERMINAL="%s"' % grub_terminal]
@@ -230,9 +230,7 @@ def find_efi_loader(target, bootid):
 
 
 def efi_loader_esp_path(loader):
-    if loader.startswith('/boot/efi'):
-        return loader[9:]  # len('/boot/efi') == 9
-    return loader
+    return loader[9:] if loader.startswith('/boot/efi') else loader
 
 
 def get_efi_disk_part(devices):
@@ -264,14 +262,12 @@ def gen_uefi_install_commands(grub_name, grub_target, grub_cmd, update_nvram,
     bootid = distroinfo.variant
     efidir = '/boot/efi'
     if distroinfo.family == distro.DISTROS.debian:
-        install_cmds.append(['dpkg-reconfigure', grub_name])
-        install_cmds.append(['update-grub'])
+        install_cmds.extend((['dpkg-reconfigure', grub_name], ['update-grub']))
     elif distroinfo.family == distro.DISTROS.redhat:
         # RHEL distros uses 'redhat' for bootid
         if bootid == 'rhel':
             bootid = 'redhat'
-        loader = find_efi_loader(target, bootid)
-        if loader:
+        if loader := find_efi_loader(target, bootid):
             # Disable running grub's install command. CentOS/RHEL ships
             # a pre-built signed grub which installs into /boot. grub2-install
             # will generated a new unsigned grub which breaks UEFI secure boot.
@@ -285,8 +281,7 @@ def gen_uefi_install_commands(grub_name, grub_target, grub_cmd, update_nvram,
                                      '--part', efi_part_num,
                                      '--loader',
                                      efi_loader_esp_path(loader)])
-            post_cmds.append(['grub2-mkconfig', '-o',
-                              '/boot/efi/EFI/%s/grub.cfg' % bootid])
+            post_cmds.append(['grub2-mkconfig', '-o', f'/boot/efi/EFI/{bootid}/grub.cfg'])
         else:
             post_cmds.append(['grub2-mkconfig', '-o', '/boot/grub2/grub.cfg'])
     else:
@@ -298,9 +293,18 @@ def gen_uefi_install_commands(grub_name, grub_target, grub_cmd, update_nvram,
         install_cmds.append([grub_cmd])
     elif grub_cmd:
         install_cmds.append(
-            [grub_cmd, '--target=%s' % grub_target,
-             '--efi-directory=%s' % efidir, '--bootloader-id=%s' % bootid,
-             '--recheck'] + ([] if update_nvram else ['--no-nvram']))
+            (
+                [
+                    grub_cmd,
+                    f'--target={grub_target}',
+                    f'--efi-directory={efidir}',
+                    f'--bootloader-id={bootid}',
+                    '--recheck',
+                ]
+                + ([] if update_nvram else ['--no-nvram'])
+            )
+        )
+
 
     # check efi boot menu before and after
     post_cmds.append(['efibootmgr', '-v'])
@@ -313,8 +317,7 @@ def gen_install_commands(grub_name, grub_cmd, distroinfo, devices,
     install_cmds = []
     post_cmds = []
     if distroinfo.family == distro.DISTROS.debian:
-        install_cmds.append(['dpkg-reconfigure', grub_name])
-        install_cmds.append(['update-grub'])
+        install_cmds.extend((['dpkg-reconfigure', grub_name], ['update-grub']))
     elif distroinfo.family == distro.DISTROS.redhat:
         if rhel_ver in ["7", "8"]:
             post_cmds.append(
@@ -324,9 +327,7 @@ def gen_install_commands(grub_name, grub_cmd, distroinfo, devices,
     else:
         raise ValueError("Unsupported os family for grub "
                          "install: %s" % distroinfo.family)
-    for dev in devices:
-        install_cmds.append([grub_cmd, dev])
-
+    install_cmds.extend([grub_cmd, dev] for dev in devices)
     return (install_cmds, post_cmds)
 
 
@@ -338,7 +339,7 @@ def check_target_arch_machine(target, arch=None, machine=None, uefi=None):
     if not machine:
         machine = platform.machine()
 
-    errmsg = "Grub is not supported on arch=%s machine=%s" % (arch, machine)
+    errmsg = f"Grub is not supported on arch={arch} machine={machine}"
     # s390x uses zipl
     if arch == "s390x":
         raise RuntimeError(errmsg)
@@ -404,11 +405,7 @@ def install_grub(devices, target, uefi=None, grubcfg=None):
 def install_grub_main(args):
     state = util.load_command_environment()
 
-    if args.target is not None:
-        target = args.target
-    else:
-        target = state['target']
-
+    target = args.target if args.target is not None else state['target']
     if target is None:
         sys.stderr.write("Unable to find target.  "
                          "Use --target or set TARGET_MOUNT_POINT\n")

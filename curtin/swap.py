@@ -46,10 +46,7 @@ def suggested_swapsize(memsize=None, maxsize=None, fsys=None):
     for top, func in formulas:
         if memsize <= top:
             size = min(func(memsize), maxsize)
-            if size < (memsize / 2) and size < 4 * GB:
-                return 0
-            return size
-
+            return 0 if size < (memsize / 2) and size < 4 * GB else size
     return maxsize
 
 
@@ -120,7 +117,7 @@ def setup_swapfile(target, fstab=None, swapfile=None, size=None, maxsize=None,
         swapfile = "/swap.img"
 
     if not swapfile.startswith("/"):
-        swapfile = "/" + swapfile
+        swapfile = f"/{swapfile}"
 
     # query the directory in which swapfile will reside
     fstype = get_fstype(target, os.path.dirname(swapfile))
@@ -154,7 +151,7 @@ def setup_swapfile(target, fstab=None, swapfile=None, size=None, maxsize=None,
                  (' && mkswap "$1" || { r=$?; rm -f "$1"; exit $r; }'),
                  'setup_swap', fpath, mbsize])
     except Exception:
-        LOG.warn("failed %s" % msg)
+        LOG.warn(f"failed {msg}")
         raise
 
     if fstab is None:
@@ -187,6 +184,6 @@ def is_swap_device(path):
         return False
     magic = util.load_file(
         path, read_len=10, offset=magic_offset, decode=False)
-    LOG.debug('Found swap magic: %s' % magic)
+    LOG.debug(f'Found swap magic: {magic}')
     return magic in [b'SWAPSPACE2', b'SWAP-SPACE']
 # vi: ts=4 expandtab syntax=python

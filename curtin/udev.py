@@ -57,9 +57,9 @@ def udevadm_settle(exists=None, timeout=None):
         # skip the settle if the requested path already exists
         if os.path.exists(exists):
             return
-        settle_cmd.extend(['--exit-if-exists=%s' % exists])
+        settle_cmd.extend([f'--exit-if-exists={exists}'])
     if timeout:
-        settle_cmd.extend(['--timeout=%s' % timeout])
+        settle_cmd.extend([f'--timeout={timeout}'])
 
     util.subp(settle_cmd)
 
@@ -114,17 +114,12 @@ def udevadm_info(path=None):
                     LOG.debug('udevadm_info: replacing shell-escape chars '
                               'in %s=%s -> %s', key, value, escaped_value)
                     parsed = shlex.split(escaped_value)
-            if ' ' not in value:
+            if ' ' in value and key == "DEVLINKS":
+                info[key] = shlex.split(parsed[0])
+            elif ' ' in value and key == 'ID_SERIAL' or ' ' not in value:
                 info[key] = parsed[0]
             else:
-                # special case some known entries with spaces, e.g. ID_SERIAL
-                # and DEVLINKS, see tests/unittests/test_udev.py
-                if key == "DEVLINKS":
-                    info[key] = shlex.split(parsed[0])
-                elif key == 'ID_SERIAL':
-                    info[key] = parsed[0]
-                else:
-                    info[key] = parsed
+                info[key] = parsed
 
     return info
 

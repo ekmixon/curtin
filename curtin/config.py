@@ -23,7 +23,7 @@ def merge_config_fp(cfgin, fp):
 def merge_config_str(cfgin, cfgstr):
     cfg2 = yaml.safe_load(cfgstr)
     if not isinstance(cfg2, dict):
-        raise TypeError("Failed reading config. not a dictionary: %s" % cfgstr)
+        raise TypeError(f"Failed reading config. not a dictionary: {cfgstr}")
 
     merge_config(cfgin, cfg2)
 
@@ -98,10 +98,11 @@ def load_config_archive(content):
 def load_config(cfg_file):
     with open(cfg_file, "r") as fp:
         content = fp.read()
-    if not content.startswith(ARCHIVE_HEADER):
-        return yaml.safe_load(content)
-    else:
-        return load_config_archive(content)
+    return (
+        load_config_archive(content)
+        if content.startswith(ARCHIVE_HEADER)
+        else yaml.safe_load(content)
+    )
 
 
 def load_command_config(args, state):
@@ -111,11 +112,7 @@ def load_command_config(args, state):
         # state 'config' points to a file with fully rendered config
         cfg_file = state.get('config')
 
-    if not cfg_file:
-        cfg = {}
-    else:
-        cfg = load_config(cfg_file)
-    return cfg
+    return load_config(cfg_file) if cfg_file else {}
 
 
 def dump_config(config):

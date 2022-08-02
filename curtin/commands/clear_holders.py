@@ -13,10 +13,7 @@ def clear_holders_main(args):
     """
     wrapper for clear_holders accepting cli args
     """
-    cfg = {}
-    if args.config:
-        cfg = args.config
-
+    cfg = args.config or {}
     # run clear holders on potential devices
     devices = args.devices
     if not devices:

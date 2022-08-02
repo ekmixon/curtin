@@ -68,7 +68,7 @@ class TestBlockBcache(CiTestCase):
             results[superblock] = bcache.superblock_asdict(device=device)
 
         for superblock in scenarios:
-            comment = 'mismatch in %s' % superblock
+            comment = f'mismatch in {superblock}'
             self.assertDictEqual(
                 self.expected[superblock], results[superblock], comment)
 
@@ -141,7 +141,7 @@ class TestBlockBcache(CiTestCase):
     def test_is_backing_sysfs(self, m_sysb_path, m_path_exists):
         """ is_backing returns True if sysfs path has bcache/label. """
         kname = self.random_string()
-        m_sysb_path.return_value = '/sys/class/block/%s' % kname
+        m_sysb_path.return_value = f'/sys/class/block/{kname}'
         m_path_exists.return_value = True
         self.assertEqual(True, bcache.is_backing(kname))
 
@@ -150,7 +150,7 @@ class TestBlockBcache(CiTestCase):
     def test_is_backing_sysfs_false(self, m_sysb_path, m_path_exists):
         """ is_backing returns False if path does not have bcache/label. """
         kname = self.random_string()
-        m_sysb_path.return_value = '/sys/class/block/%s' % kname
+        m_sysb_path.return_value = f'/sys/class/block/{kname}'
         m_path_exists.return_value = False
         self.assertEqual(False, bcache.is_backing(kname))
 
@@ -174,7 +174,7 @@ class TestBlockBcache(CiTestCase):
     def test_is_caching_sysfs(self, m_sysb_path, m_path_exists):
         """ is_caching returns True if sysfs path has bcache/label. """
         kname = self.random_string()
-        m_sysb_path.return_value = '/sys/class/block/%s' % kname
+        m_sysb_path.return_value = f'/sys/class/block/{kname}'
         m_path_exists.return_value = True
         self.assertEqual(True, bcache.is_caching(kname))
 
@@ -183,7 +183,7 @@ class TestBlockBcache(CiTestCase):
     def test_is_caching_sysfs_false(self, m_sysb_path, m_path_exists):
         """ is_caching returns False if path does not have bcache/label. """
         kname = self.random_string()
-        m_sysb_path.return_value = '/sys/class/block/%s' % kname
+        m_sysb_path.return_value = f'/sys/class/block/{kname}'
         m_path_exists.return_value = False
         self.assertEqual(False, bcache.is_caching(kname))
 
@@ -192,17 +192,16 @@ class TestBlockBcache(CiTestCase):
     def test_sysfs_path(self, m_sysb_path, m_path_exists):
         """ sysfs_path returns /sys/class/block/<device>/bcache for device."""
         kname = self.random_string()
-        m_sysb_path.return_value = '/sys/class/block/%s' % kname
+        m_sysb_path.return_value = f'/sys/class/block/{kname}'
         m_path_exists.return_value = True
-        self.assertEqual('/sys/class/block/%s/bcache' % kname,
-                         bcache.sysfs_path(kname))
+        self.assertEqual(f'/sys/class/block/{kname}/bcache', bcache.sysfs_path(kname))
 
     @mock.patch('curtin.block.bcache.os.path.exists')
     @mock.patch('curtin.block.bcache.sys_block_path')
     def test_sysfs_path_raise_strict_nopath(self, m_sysb_path, m_path_exists):
         """ sysfs_path raises OSError on strict=True and missing path. """
         kname = self.random_string()
-        m_sysb_path.return_value = '/sys/class/block/%s' % kname
+        m_sysb_path.return_value = f'/sys/class/block/{kname}'
         m_path_exists.return_value = False
         with self.assertRaises(OSError):
             bcache.sysfs_path(kname)
@@ -212,10 +211,12 @@ class TestBlockBcache(CiTestCase):
     def test_sysfs_path_non_strict(self, m_sysb_path, m_path_exists):
         """ sysfs_path returns path if missing and strict=False."""
         kname = self.random_string()
-        m_sysb_path.return_value = '/sys/class/block/%s' % kname
+        m_sysb_path.return_value = f'/sys/class/block/{kname}'
         m_path_exists.return_value = False
-        self.assertEqual('/sys/class/block/%s/bcache' % kname,
-                         bcache.sysfs_path(kname, strict=False))
+        self.assertEqual(
+            f'/sys/class/block/{kname}/bcache',
+            bcache.sysfs_path(kname, strict=False),
+        )
 
     @mock.patch('curtin.block.bcache.sysfs_path')
     @mock.patch('curtin.block.bcache.util.write_file')
@@ -223,8 +224,8 @@ class TestBlockBcache(CiTestCase):
         """ write_label writes label to device/bcache/label attribute."""
         label = self.random_string()
         kname = self.random_string()
-        bdir = '/sys/class/block/%s/bcache' % kname
-        label_path = bdir + '/label'
+        bdir = f'/sys/class/block/{kname}/bcache'
+        label_path = f'{bdir}/label'
         m_sysfs_path.return_value = bdir
         bcache.write_label(label, kname)
         m_write_file.assert_called_with(label_path, content=label, mode=None)
@@ -237,14 +238,14 @@ class TestBlockBcache(CiTestCase):
         """ get_attached_cacheset resolves 'cache' symlink under bcache dir."""
         kname = self.random_string()
         cset_uuid = self.random_string()
-        bdir = '/sys/class/block/%s/bcache' % kname
+        bdir = f'/sys/class/block/{kname}/bcache'
         m_spath.return_value = bdir
         m_exists.return_value = True
-        cacheset = '/sys/fs/bcache/%s' % cset_uuid
+        cacheset = f'/sys/fs/bcache/{cset_uuid}'
         m_base.return_value = cacheset
 
         self.assertEqual(cacheset, bcache.get_attached_cacheset(kname))
-        m_exists.assert_called_with(bdir + '/cache')
+        m_exists.assert_called_with(f'{bdir}/cache')
 
     @mock.patch('curtin.block.bcache.os.path.exists')
     @mock.patch('curtin.block.bcache.os.path.realpath')
@@ -263,7 +264,7 @@ class TestBlockBcache(CiTestCase):
             'stats_five_minute', 'stats_hour', 'stats_total', 'stop',
             'synchronous', 'tree_depth', 'unregister',
         ]
-        cset_path = '/sys/fs/bcache/%s' % cset_uuid
+        cset_path = f'/sys/fs/bcache/{cset_uuid}'
         m_listdir.return_value = cset_dir_keys
         m_real.side_effect = iter([bdev_target])
         m_exists.return_value = True
@@ -277,7 +278,7 @@ class TestBlockBcache(CiTestCase):
         """ get_cacheset_cachedev finds cacheset device path."""
         cset_uuid = self.random_string()
         cachedev_target = self.random_string()
-        cset_path = '/sys/fs/bcache/%s/cache0' % cset_uuid
+        cset_path = f'/sys/fs/bcache/{cset_uuid}/cache0'
         m_exists.return_value = True
         m_real.side_effect = iter([cachedev_target])
         results = bcache.get_cacheset_cachedev(cset_uuid)
@@ -293,11 +294,13 @@ class TestBlockBcache(CiTestCase):
         backing_kname = self.random_string()
         caching_kname = self.random_string()
         m_list.return_value = [backing_kname, caching_kname]
-        m_sysp.side_effect = lambda x: '/sys/class/block/%s/bcache' % x
+        m_sysp.side_effect = lambda x: f'/sys/class/block/{x}/bcache'
         m_back.side_effect = iter([True, False])
 
-        self.assertEqual('/sys/class/block/%s/bcache' % backing_kname,
-                         bcache.get_backing_device(bcache_kname))
+        self.assertEqual(
+            f'/sys/class/block/{backing_kname}/bcache',
+            bcache.get_backing_device(bcache_kname),
+        )
 
     @mock.patch('curtin.block.bcache.is_backing')
     @mock.patch('curtin.block.bcache.sysfs_path')
@@ -323,12 +326,12 @@ class TestBlockBcache(CiTestCase):
         """ stop_cacheset calls _stop_device with correct sysfs path. """
         cset_uuid = self.random_string()
         bcache.stop_cacheset(cset_uuid)
-        m_stop.assert_called_with('/sys/fs/bcache/%s' % cset_uuid)
+        m_stop.assert_called_with(f'/sys/fs/bcache/{cset_uuid}')
 
     @mock.patch('curtin.block.bcache._stop_device')
     def test_stop_cacheset_full_path(self, m_stop):
         """ stop_cacheset accepts full path to cacheset. """
-        cset_path = '/sys/fs/bcache/%s' % self.random_string()
+        cset_path = f'/sys/fs/bcache/{self.random_string()}'
         bcache.stop_cacheset(cset_path)
         m_stop.assert_called_with(cset_path)
 
@@ -337,7 +340,7 @@ class TestBlockBcache(CiTestCase):
     @mock.patch('curtin.block.bcache.is_backing')
     def test_stop_device_backing(self, m_back, m_cache, m_stop):
         """ stop_device allows backing device to be stopped. """
-        device = '/sys/class/block/%s' % self.random_string()
+        device = f'/sys/class/block/{self.random_string()}'
         m_back.return_value = True
         bcache.stop_device(device)
         m_stop.assert_called_with(device)
@@ -349,7 +352,7 @@ class TestBlockBcache(CiTestCase):
     @mock.patch('curtin.block.bcache.is_backing')
     def test_stop_device_caching(self, m_back, m_cache, m_stop):
         """ stop_device allows caching device to be stopped. """
-        device = '/sys/class/block/%s' % self.random_string()
+        device = f'/sys/class/block/{self.random_string()}'
         m_back.return_value = False
         m_cache.return_value = True
         bcache.stop_device(device)
@@ -374,7 +377,7 @@ class TestBlockBcache(CiTestCase):
     @mock.patch('curtin.block.bcache.is_backing')
     def test_stop_device_raise_non_bcache_dev(self, m_back, m_cache, m_stop):
         """ stop_device raises ValueError if device is not bcache device."""
-        device = '/sys/class/block/%s' % self.random_string()
+        device = f'/sys/class/block/{self.random_string()}'
         m_back.return_value = False
         m_cache.return_value = False
         with self.assertRaises(ValueError):
@@ -435,8 +438,7 @@ class TestBlockBcache(CiTestCase):
         device = self.random_string()
         stop_path = os.path.join(device, 'stop')
         m_exists.return_value = True
-        m_wait.side_effect = (
-            OSError('Timeout exeeded for removal of %s' % stop_path))
+        m_wait.side_effect = OSError(f'Timeout exeeded for removal of {stop_path}')
         with self.assertRaises(OSError):
             bcache._stop_device(device)
 

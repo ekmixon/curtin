@@ -38,10 +38,7 @@ class DasdPartitionTable:
 
         # first partition always starts at track 2
         # all others start after the previous partition ends
-        if partnumber == 1:
-            start = 2
-        else:
-            start = int(self.partitions[-1].end) + 1
+        start = 2 if partnumber == 1 else int(self.partitions[-1].end) + 1
         end = start + self.tracks_needed(partsize) - 1
 
         return [
@@ -65,14 +62,12 @@ class DasdPartitionTable:
 
         partitions = self._ptable_for_new_partition(partnumber, partsize)
         LOG.debug("fdasd: partitions to be created: %s", partitions)
-        content = "\n".join([
-            "[%s,%s]" % (part[0], part[1]) for part in partitions
-            ])
+        content = "\n".join([f"[{part[0]},{part[1]}]" for part in partitions])
         LOG.debug("fdasd: content=\n%s", content)
         wfp = tempfile.NamedTemporaryFile(suffix=".fdasd", delete=False)
         wfp.close()
         util.write_file(wfp.name, content)
-        cmd = ['fdasd', '--verbose', '--config=%s' % wfp.name, self.devname]
+        cmd = ['fdasd', '--verbose', f'--config={wfp.name}', self.devname]
         LOG.debug('Partitioning %s with %s', self.devname, cmd)
         try:
             out, err = util.subp(cmd, capture=True)
@@ -165,8 +160,9 @@ def dasdinfo(device_id):
     _valid_device_id(device_id)
 
     out, err = util.subp(
-        ['dasdinfo', '--all', '--export', '--busid=%s' % device_id],
-        capture=True)
+        ['dasdinfo', '--all', '--export', f'--busid={device_id}'], capture=True
+    )
+
 
     return util.load_shell_content(out)
 
@@ -187,7 +183,7 @@ DASD_FORMAT = r"^format\s+:.+\s+(?P<value>\w+\s\w+)$"
 def find_val(regex, content):
     m = re.search(regex, content, re.MULTILINE)
     if m is not None:
-        return m.group("value")
+        return m["value"]
 
 
 def _dasd_format(dasdview_output):
@@ -200,13 +196,13 @@ def _dasd_format(dasdview_output):
     if not dasdview_output:
         return
 
-    mapping = {
-       'cdl formatted': 'cdl',
-       'ldl formatted': 'ldl',
-       'not formatted': 'not-formatted',
-    }
     diskfmt = find_val(DASD_FORMAT, dasdview_output)
     if diskfmt is not None:
+        mapping = {
+           'cdl formatted': 'cdl',
+           'ldl formatted': 'ldl',
+           'not formatted': 'not-formatted',
+        }
         return mapping.get(diskfmt.lower())
 
 
@@ -251,7 +247,7 @@ class CcwDevice(object):
         _valid_device_id(self.device_id)
 
     def ccw_device_attr_path(self, attr):
-        return '/sys/bus/ccw/devices/%s/%s' % (self.device_id, attr)
+        return f'/sys/bus/ccw/devices/{self.device_id}/{attr}'
 
     def ccw_device_attr(self, attr):
         """ Read a ccw_device attribute from sysfs for specified device_id.
@@ -262,20 +258,19 @@ class CcwDevice(object):
             otherwise empty string if path to attribute does not exist.
         :raises: ValueError if device_id is not valid
         """
-        attrdata = None
-
         sysfs_attr_path = self.ccw_device_attr_path(attr)
-        if os.path.isfile(sysfs_attr_path):
-            attrdata = util.load_file(sysfs_attr_path).strip()
-
-        return attrdata
+        return (
+            util.load_file(sysfs_attr_path).strip()
+            if os.path.isfile(sysfs_attr_path)
+            else None
+        )
 
 
 class DasdDevice(CcwDevice):
 
     @property
     def devname(self):
-        return '/dev/disk/by-path/ccw-%s' % self.device_id
+        return f'/dev/disk/by-path/ccw-{self.device_id}'
 
     def is_not_formatted(self):
         """ Returns a boolean indicating if the specified device_id is not yet
@@ -306,11 +301,10 @@ class DasdDevice(CcwDevice):
         :returns: string: One of ['cdl', 'ldl', 'not-formatted'].
         :raises: ValueError if dasdview result missing 'format' section.
         """
-        format = dasd_format(self.devname)
-        if not format:
-            raise ValueError(
-                'could not determine format of %s' % self.devname)
-        return format
+        if format := dasd_format(self.devname):
+            return format
+        else:
+            raise ValueError(f'could not determine format of {self.devname}')
 
     def label(self):
         """Read and return specified device label (VOLSER) value.
@@ -320,8 +314,7 @@ class DasdDevice(CcwDevice):
         """
         info = dasdinfo(self.device_id)
         if 'ID_SERIAL' not in info:
-            raise ValueError(
-                'Failed to read %s label (VOLSER)' % self.device_id)
+            raise ValueError(f'Failed to read {self.device_id} label (VOLSER)')
 
         return info['ID_SERIAL']
 
@@ -423,12 +416,13 @@ class DasdDevice(CcwDevice):
 
         opts = [
             '-y',
-            '--blocksize=%s' % blksize,
-            '--disk_layout=%s' % layout,
-            '--mode=%s' % mode
+            f'--blocksize={blksize}',
+            f'--disk_layout={layout}',
+            f'--mode={mode}',
         ]
+
         if set_label:
-            opts += ['--label=%s' % set_label]
+            opts += [f'--label={set_label}']
         if keep_label:
             opts += ['--keep_label']
         if no_label:

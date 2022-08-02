@@ -27,7 +27,7 @@ from .log import LOG
 
 error = urllib_error
 
-DEFAULT_HEADERS = {'User-Agent': 'Curtin/' + version.version_string()}
+DEFAULT_HEADERS = {'User-Agent': f'Curtin/{version.version_string()}'}
 
 
 class _ReRaisedException(Exception):
@@ -160,8 +160,8 @@ def get_maas_version(endpoint):
         LOG.warn('Failed to parse endpoint URL: %s', e)
         return None
 
-    maas_host = "%s://%s" % (parsed.scheme, parsed.netloc)
-    maas_api_version_url = "%s/MAAS/api/version/" % (maas_host)
+    maas_host = f"{parsed.scheme}://{parsed.netloc}"
+    maas_api_version_url = f"{maas_host}/MAAS/api/version/"
 
     try:
         result = geturl(maas_api_version_url)
@@ -176,7 +176,7 @@ def get_maas_version(endpoint):
                  MAAS_API_SUPPORTED_VERSIONS)
         return None
 
-    maas_version_url = "%s/MAAS/api/%s/version/" % (maas_host, api_version)
+    maas_version_url = f"{maas_host}/MAAS/api/{api_version}/version/"
     maas_version = None
     try:
         result = geturl(maas_version_url)
@@ -209,9 +209,7 @@ def _geturl(url, headers=None, headers_cb=None, exception_cb=None, data=None):
         req = urllib_request.Request(url=url, data=data, headers=headers)
         r = urllib_request.urlopen(req).read()
         # python2, we want to return bytes, which is what python3 does
-        if isinstance(r, str):
-            return r.decode()
-        return r
+        return r.decode() if isinstance(r, str) else r
     except urllib_error.HTTPError as exc:
         myexc = UrlError(exc, code=exc.code, headers=exc.headers, url=url,
                          reason=exc.reason)
@@ -235,7 +233,7 @@ def geturl(url, headers=None, headers_cb=None, exception_cb=None,
         retries = []
 
     curexc = None
-    for trynum, naptime in enumerate(retries):
+    for naptime in retries:
         try:
             return _geturl(url=url, headers=headers, headers_cb=headers_cb,
                            exception_cb=exception_cb, data=data)
@@ -268,14 +266,14 @@ class UrlError(IOError):
 
     def __str__(self):
         if isinstance(self.cause, urllib_error.HTTPError):
-            msg = "http error: %s" % self.cause.code
+            msg = f"http error: {self.cause.code}"
         elif isinstance(self.cause, urllib_error.URLError):
-            msg = "url error: %s" % self.cause.reason
+            msg = f"url error: {self.cause.reason}"
         elif isinstance(self.cause, socket.timeout):
-            msg = "socket timeout: %s" % self.cause
+            msg = f"socket timeout: {self.cause}"
         else:
-            msg = "Unknown Exception: %s" % self.cause
-        return "[%s] " % self.url + msg
+            msg = f"Unknown Exception: {self.cause}"
+        return f"[{self.url}] " + msg
 
 
 class OauthUrlHelper(object):
@@ -315,7 +313,7 @@ class OauthUrlHelper(object):
                     rval = '"%s"' % ("*" * len(val))
                 else:
                     rval = '"%s"' % val
-            return '%s=%s' % (name, rval)
+            return f'{name}={rval}'
 
         return ("OauthUrlHelper(" + ','.join([r(f) for f in fields]) + ")")
 
@@ -337,8 +335,7 @@ class OauthUrlHelper(object):
             fp.write(json.dumps(cur))
 
     def exception_cb(self, exception):
-        if not (isinstance(exception, UrlError) and
-                (exception.code == 403 or exception.code == 401)):
+        if not (isinstance(exception, UrlError) and exception.code in [403, 401]):
             return
 
         if 'date' not in exception.headers:
@@ -396,9 +393,7 @@ class OauthUrlHelper(object):
         return ret
 
     def _headers_cb(self, extra_headers_cb, url):
-        headers = {}
-        if extra_headers_cb:
-            headers = extra_headers_cb(url)
+        headers = extra_headers_cb(url) if extra_headers_cb else {}
         headers.update(self.headers_cb(url))
         return headers
 

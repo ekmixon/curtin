@@ -47,7 +47,7 @@ class TestCmdArg2Cfg(CiTestCase):
         config.merge_config(via_merge, cfg2)
 
         via_merge_cmdarg = copy.deepcopy(cfg1)
-        config.merge_cmdarg(via_merge_cmdarg, 'json:=' + json.dumps(cfg2))
+        config.merge_cmdarg(via_merge_cmdarg, f'json:={json.dumps(cfg2)}')
 
         self.assertEqual(via_merge, via_merge_cmdarg)
 

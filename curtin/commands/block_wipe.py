@@ -14,9 +14,7 @@ def wipe_main(args):
             LOG.debug('Wiping volume %s with mode=%s', blockdev, args.mode)
             block.wipe_volume(blockdev, mode=args.mode)
         except Exception as e:
-            sys.stderr.write(
-                "Failed to wipe volume %s in mode %s: %s" %
-                (blockdev, args.mode, e))
+            sys.stderr.write(f"Failed to wipe volume {blockdev} in mode {args.mode}: {e}")
             sys.exit(1)
     sys.exit(0)
 

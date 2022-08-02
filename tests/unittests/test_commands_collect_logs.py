@@ -60,7 +60,7 @@ class TestCollectLogs(CiTestCase):
         write_file(unusedcfg, 'install:\n  log_file: /tmp/unused.log\n')
         utcnow = datetime.utcnow()
         datestr = utcnow.strftime('%Y-%m-%d-%H-%M')
-        tardir = self.tmp_path('curtin-logs-%s' % datestr, _dir=self.tmpdir)
+        tardir = self.tmp_path(f'curtin-logs-{datestr}', _dir=self.tmpdir)
         curtin_config = self.tmp_path('curtin-config', _dir=tardir)
 
         self.assertEqual(
@@ -88,7 +88,7 @@ class TestCollectLogs(CiTestCase):
         packdir = self.tmp_path('configs', _dir=self.new_root)
         utcnow = datetime.utcnow()
         datestr = utcnow.strftime('%Y-%m-%d-%H-%M')
-        tardir = self.tmp_path('curtin-logs-%s' % datestr, _dir=self.tmpdir)
+        tardir = self.tmp_path(f'curtin-logs-{datestr}', _dir=self.tmpdir)
         ensure_dir(packdir)
         cfg1 = os.path.join(packdir, 'config-001.yaml')
         cfg2 = os.path.join(packdir, 'config-002.yaml')
@@ -157,7 +157,7 @@ class TestCollectLogs(CiTestCase):
              mock.call('/proc/cmdline', self.new_root),
              mock.call('/proc/partitions', self.new_root)],
             m_copy.call_args_list)
-        for fname in ('os-release', 'cmdline', 'partitions'):
+        for _ in ('os-release', 'cmdline', 'partitions'):
             self.assertIn(
                 mock.call(os.path.join(self.new_root, 'os-release'), 0o644),
                 m_chmod.call_args_list)
@@ -166,9 +166,7 @@ class TestCollectLogs(CiTestCase):
         """_collect_system_info saves lshw details in target_dir."""
 
         def fake_subp(cmd, capture=False, combine_capture=False):
-            if cmd == ['sudo', 'lshw'] and capture:
-                return ('lshw output', '')
-            return ('', '')
+            return ('lshw output', '') if cmd == ['sudo', 'lshw'] and capture else ('', '')
 
         self.mock_subp.side_effect = fake_subp
         collect_logs._collect_system_info(self.new_root, config={})
@@ -211,10 +209,9 @@ class TestCollectLogs(CiTestCase):
 
         def fake_subp(cmd, capture=False, combine_capture=False):
             if cmd[0] == 'ip':
-                assert combine_capture, (
-                    'combine_capture not set for cmd %s' % cmd)
+                assert combine_capture, f'combine_capture not set for cmd {cmd}'
             else:
-                assert capture, 'capture not set True for cmd %s' % cmd
+                assert capture, f'capture not set True for cmd {cmd}'
             if cmd == ['ip', '--oneline', 'address', 'list']:
                 return ipv4_addr, ''
             if cmd == ['ip', '--oneline', '-6', 'address', 'list']:
@@ -239,7 +236,7 @@ class TestCreateTar(CiTestCase):
         super(TestCreateTar, self).setUp()
         self.new_root = self.tmp_dir()
         self.utcnow = datetime.utcnow()
-        self.tardir = 'curtin-logs-%s' % self.utcnow.strftime('%Y-%m-%d-%H-%M')
+        self.tardir = f"curtin-logs-{self.utcnow.strftime('%Y-%m-%d-%H-%M')}"
         self.add_patch(
             'curtin.commands.collect_logs._collect_system_info', 'm_sys_info')
         self.tmpdir = self.tmp_path('mytemp', _dir=self.new_root)
@@ -267,8 +264,11 @@ class TestCreateTar(CiTestCase):
         tarfile = self.tmp_path('my.tar',
                                 _dir=os.path.join(self.new_root, 'dont/exist'))
         destination_dir = os.path.dirname(tarfile)
-        self.assertFalse(os.path.exists(destination_dir),
-                         'Expected absent directory: %s' % destination_dir)
+        self.assertFalse(
+            os.path.exists(destination_dir),
+            f'Expected absent directory: {destination_dir}',
+        )
+
         self.add_patch('curtin.util.subp', 'mock_subp')
         self.mock_subp.return_value = ('', '')
         with mock.patch('sys.stderr'):
@@ -280,8 +280,10 @@ class TestCreateTar(CiTestCase):
                       capture=True),
             self.mock_subp.call_args_list)
         self.m_sys_info.assert_called_with(self.tardir, {})
-        self.assertTrue(os.path.exists(destination_dir),
-                        'Expected directory created: %s' % destination_dir)
+        self.assertTrue(
+            os.path.exists(destination_dir),
+            f'Expected directory created: {destination_dir}',
+        )
 
     def test_create_log_tarfile_copies_configured_logs(self):
         """create_log_tarfile copies configured log_file and post_files.

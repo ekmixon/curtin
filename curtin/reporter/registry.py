@@ -23,7 +23,7 @@ class DictRegistry(object):
         if key in self._items:
             del self._items[key]
         elif not force:
-            raise KeyError("%s: key not present to unregister" % key)
+            raise KeyError(f"{key}: key not present to unregister")
 
     @property
     def registered_items(self):

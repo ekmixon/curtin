@@ -16,9 +16,9 @@ class TestApplyNet(CiTestCase):
 
         base = 'curtin.commands.apply_net.'
         patches = [
-            (base + '_maybe_remove_legacy_eth0', 'm_legacy'),
-            (base + '_disable_ipv6_privacy_extensions', 'm_ipv6_priv'),
-            (base + '_patch_ifupdown_ipv6_mtu_hook', 'm_ipv6_mtu'),
+            (f'{base}_maybe_remove_legacy_eth0', 'm_legacy'),
+            (f'{base}_disable_ipv6_privacy_extensions', 'm_ipv6_priv'),
+            (f'{base}_patch_ifupdown_ipv6_mtu_hook', 'm_ipv6_mtu'),
             ('curtin.net.netconfig_passthrough_available', 'm_netpass_avail'),
             ('curtin.net.render_netconfig_passthrough', 'm_netpass_render'),
             ('curtin.net.parse_net_config_data', 'm_net_parsedata'),
@@ -26,6 +26,7 @@ class TestApplyNet(CiTestCase):
             ('curtin.net.network_state.from_state_file', 'm_ns_from_file'),
             ('curtin.config.load_config', 'm_load_config'),
         ]
+
         for (tgt, attr) in patches:
             self.add_patch(tgt, attr)
 

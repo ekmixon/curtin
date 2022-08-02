@@ -25,7 +25,7 @@ def builtin_module_name():
         except ImportError:
             continue
         else:
-            print('importing and returning: %s' % name)
+            print(f'importing and returning: {name}')
             importlib.import_module(name)
             return name
 
@@ -36,7 +36,7 @@ def simple_mocked_open(content=None):
         content = ''
     m_open = mock.mock_open(read_data=content)
     mod_name = builtin_module_name()
-    m_patch = '{}.open'.format(mod_name)
+    m_patch = f'{mod_name}.open'
     with mock.patch(m_patch, m_open, create=True):
         yield m_open
 
@@ -87,17 +87,10 @@ class CiTestCase(TestCase):
             self.old_handlers = self.logger.handlers
             self.logger.handlers = [handler]
 
-        if self.allowed_subp is True:
-            util.subp = _real_subp
-        else:
-            util.subp = self._fake_subp
+        util.subp = _real_subp if self.allowed_subp is True else self._fake_subp
 
     def _fake_subp(self, *args, **kwargs):
-        if 'args' in kwargs:
-            cmd = kwargs['args']
-        else:
-            cmd = args[0]
-
+        cmd = kwargs.get('args', args[0])
         if not isinstance(cmd, str):
             cmd = cmd[0]
         pass_through = False
@@ -113,9 +106,16 @@ class CiTestCase(TestCase):
         if pass_through:
             return _real_subp(*args, **kwargs)
         raise Exception(
-            "called subp. set self.allowed_subp=True to allow\n subp(%s)" %
-            ', '.join([str(repr(a)) for a in args] +
-                      ["%s=%s" % (k, repr(v)) for k, v in kwargs.items()]))
+            (
+                "called subp. set self.allowed_subp=True to allow\n subp(%s)"
+                % ', '.join(
+                    (
+                        [repr(a) for a in args]
+                        + [f"{k}={repr(v)}" for k, v in kwargs.items()]
+                    )
+                )
+            )
+        )
 
     def tearDown(self):
         util.subp = _real_subp
@@ -135,8 +135,7 @@ class CiTestCase(TestCase):
     def tmp_dir(self, dir=None, cleanup=True):
         """Return a full path to a temporary directory for the test run."""
         if dir is None:
-            tmpd = tempfile.mkdtemp(
-                prefix="curtin-ci-%s." % self.__class__.__name__)
+            tmpd = tempfile.mkdtemp(prefix=f"curtin-ci-{self.__class__.__name__}.")
         else:
             tmpd = tempfile.mkdtemp(dir=dir)
         self.addCleanup(shutil.rmtree, tmpd)

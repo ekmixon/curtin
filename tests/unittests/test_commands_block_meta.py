@@ -18,11 +18,11 @@ class TestGetPathToStorageVolume(CiTestCase):
     def setUp(self):
         super(TestGetPathToStorageVolume, self).setUp()
         basepath = 'curtin.commands.block_meta.'
-        self.add_patch(basepath + 'os.path.exists', 'm_exists')
-        self.add_patch(basepath + 'block.lookup_disk', 'm_lookup')
-        self.add_patch(basepath + 'devsync', 'm_devsync')
-        self.add_patch(basepath + 'util.subp', 'm_subp')
-        self.add_patch(basepath + 'multipath.is_mpath_member', 'm_mp')
+        self.add_patch(f'{basepath}os.path.exists', 'm_exists')
+        self.add_patch(f'{basepath}block.lookup_disk', 'm_lookup')
+        self.add_patch(f'{basepath}devsync', 'm_devsync')
+        self.add_patch(f'{basepath}util.subp', 'm_subp')
+        self.add_patch(f'{basepath}multipath.is_mpath_member', 'm_mp')
 
     def test_block_lookup_called_with_disk_wwn(self):
         volume = 'mydisk'
@@ -60,7 +60,7 @@ class TestGetPathToStorageVolume(CiTestCase):
         volume = 'mydisk'
         wwn = self.random_string()
         serial = self.random_string()
-        path = "/%s/%s" % (self.random_string(), self.random_string())
+        path = f"/{self.random_string()}/{self.random_string()}"
         cfg = {'id': volume, 'type': 'disk',
                'path': path, 'wwn': wwn, 'serial': serial}
         s_cfg = OrderedDict({volume: cfg})
@@ -76,7 +76,7 @@ class TestGetPathToStorageVolume(CiTestCase):
 
     def test_block_lookup_not_called_with_wwn_or_serial_keys(self):
         volume = 'mydisk'
-        path = "/%s/%s" % (self.random_string(), self.random_string())
+        path = f"/{self.random_string()}/{self.random_string()}"
         cfg = {'id': volume, 'type': 'disk', 'path': path}
         s_cfg = OrderedDict({volume: cfg})
         result = block_meta.get_path_to_storage_volume(volume, s_cfg)
@@ -87,7 +87,7 @@ class TestGetPathToStorageVolume(CiTestCase):
         volume = 'mydisk'
         wwn = self.random_string()
         serial = self.random_string()
-        path = "/%s/%s" % (self.random_string(), self.random_string())
+        path = f"/{self.random_string()}/{self.random_string()}"
         cfg = {'id': volume, 'type': 'disk',
                'path': path, 'wwn': wwn, 'serial': serial}
         s_cfg = OrderedDict({volume: cfg})
@@ -114,9 +114,8 @@ class TestBlockMetaSimple(CiTestCase):
 
         # block_meta
         basepath = 'curtin.commands.block_meta.'
-        self.add_patch(basepath + 'get_bootpt_cfg', 'mock_bootpt_cfg')
-        self.add_patch(basepath + 'get_partition_format_type',
-                       'mock_part_fmt_type')
+        self.add_patch(f'{basepath}get_bootpt_cfg', 'mock_bootpt_cfg')
+        self.add_patch(f'{basepath}get_partition_format_type', 'mock_part_fmt_type')
         # block
         self.add_patch('curtin.block.stop_all_unused_multipath_devices',
                        'mock_block_stop_mp')
@@ -144,7 +143,7 @@ class TestBlockMetaSimple(CiTestCase):
             'uri': 'http://myhost/curtin-unittest-dd.xz'
         }
         devname = "fakedisk1p1"
-        devnode = "/dev/" + devname
+        devnode = f"/dev/{devname}"
         self.mock_block_get_dev_name_entry.return_value = (devname, devnode)
 
         block_meta.write_image_to_disk(source, devname)
@@ -168,7 +167,7 @@ class TestBlockMetaSimple(CiTestCase):
             'uri': 'http://myhost/curtin-unittest-dd.tgz'
         }
         devname = "fakedisk1p1"
-        devnode = "/dev/" + devname
+        devnode = f"/dev/{devname}"
         self.mock_block_get_dev_name_entry.return_value = (devname, devnode)
 
         block_meta.write_image_to_disk(source, devname)
@@ -191,7 +190,7 @@ class TestBlockMetaSimple(CiTestCase):
     @patch('curtin.commands.block_meta.write_image_to_disk')
     def test_meta_simple_calls_write_img(self, mock_write_image, mock_clear):
         devname = "fakedisk1p1"
-        devnode = "/dev/" + devname
+        devnode = f"/dev/{devname}"
         sources = {
             'unittest': {'type': 'dd-xz',
                          'uri': 'http://myhost/curtin-unittest-dd.xz'}
@@ -219,7 +218,7 @@ class TestBlockMetaSimple(CiTestCase):
     @patch('curtin.commands.block_meta.meta_clear')
     @patch('curtin.commands.block_meta.write_image_to_disk')
     @patch('curtin.commands.block_meta.get_device_paths_from_storage_config')
-    @patch('curtin.block.lookup_disk', new=lambda s: "/dev/" + s[:-6])
+    @patch('curtin.block.lookup_disk', new=lambda s: f"/dev/{s[:-6]}")
     def test_meta_simple_grub_device(self, mock_gdpfsc, mock_write_image,
                                      mock_clear):
         # grub_device can indicate which device to choose when multiple
@@ -227,6 +226,7 @@ class TestBlockMetaSimple(CiTestCase):
         # because that's how dd imaging works.
         def _gdpfsc(cfg):
             return [x[1]["path"] for x in cfg.items()]
+
         mock_gdpfsc.side_effect = _gdpfsc
         sources = {
             'unittest': {'type': 'dd-xz',
@@ -260,7 +260,8 @@ class TestBlockMetaSimple(CiTestCase):
 
         def _gdne(devname):
             bname = devname.split('/dev/')[-1]
-            return (bname, "/dev/" + bname)
+            return bname, f"/dev/{bname}"
+
         self.mock_block_get_dev_name_entry.side_effect = _gdne
         mock_write_image.return_value = devname
 
@@ -279,9 +280,9 @@ class TestBlockMeta(CiTestCase):
         super(TestBlockMeta, self).setUp()
 
         basepath = 'curtin.commands.block_meta.'
-        self.add_patch(basepath + 'get_path_to_storage_volume', 'mock_getpath')
-        self.add_patch(basepath + 'make_dname', 'mock_make_dname')
-        self.add_patch(basepath + 'multipath', 'm_mp')
+        self.add_patch(f'{basepath}get_path_to_storage_volume', 'mock_getpath')
+        self.add_patch(f'{basepath}make_dname', 'mock_make_dname')
+        self.add_patch(f'{basepath}multipath', 'm_mp')
         self.add_patch('curtin.util.load_command_environment',
                        'mock_load_env')
         self.add_patch('curtin.util.subp', 'mock_subp')
@@ -373,8 +374,8 @@ class TestBlockMeta(CiTestCase):
 
         block_meta.disk_handler(info, self.storage_config, {})
 
-        print("clear_holders: %s" % self.mock_clear_holders.call_args_list)
-        print("assert_clear: %s" % self.mock_assert_clear.call_args_list)
+        print(f"clear_holders: {self.mock_clear_holders.call_args_list}")
+        print(f"assert_clear: {self.mock_assert_clear.call_args_list}")
         self.mock_clear_holders.assert_called_with(disk)
         self.mock_assert_clear.assert_called_with(disk)
 
@@ -383,7 +384,7 @@ class TestBlockMeta(CiTestCase):
         disk_info = self.storage_config.get('sda')
         part_info = self.storage_config.get('sda-part1')
         disk_kname = disk_info.get('path')
-        part_kname = disk_kname + '1'
+        part_kname = f'{disk_kname}1'
         self.mock_getpath.side_effect = iter([
             disk_kname,
             part_kname,
@@ -573,17 +574,31 @@ class TestZFSRootUpdates(CiTestCase):
 
     def test_basic_zfsroot_update_storage_config(self):
         zfsroot_volname = "/ROOT/zfsroot"
-        pool_id = self.zfsroot_id + '_zfsroot_pool'
+        pool_id = f'{self.zfsroot_id}_zfsroot_pool'
         newents = [
-            {'type': 'zpool', 'id': pool_id,
-             'pool': 'rpool', 'vdevs': ['disk1p1'], 'mountpoint': '/'},
-            {'type': 'zfs', 'id': self.zfsroot_id + '_zfsroot_container',
-             'pool': pool_id, 'volume': '/ROOT',
-             'properties': {'canmount': 'off', 'mountpoint': 'none'}},
-            {'type': 'zfs', 'id': self.zfsroot_id + '_zfsroot_fs',
-             'pool': pool_id, 'volume': zfsroot_volname,
-             'properties': {'canmount': 'noauto', 'mountpoint': '/'}},
+            {
+                'type': 'zpool',
+                'id': pool_id,
+                'pool': 'rpool',
+                'vdevs': ['disk1p1'],
+                'mountpoint': '/',
+            },
+            {
+                'type': 'zfs',
+                'id': f'{self.zfsroot_id}_zfsroot_container',
+                'pool': pool_id,
+                'volume': '/ROOT',
+                'properties': {'canmount': 'off', 'mountpoint': 'none'},
+            },
+            {
+                'type': 'zfs',
+                'id': f'{self.zfsroot_id}_zfsroot_fs',
+                'pool': pool_id,
+                'volume': zfsroot_volname,
+                'properties': {'canmount': 'noauto', 'mountpoint': '/'},
+            },
         ]
+
         expected = OrderedDict(
             [(i['id'], i) for i in self.base + newents + self.extra])
 
@@ -591,7 +606,7 @@ class TestZFSRootUpdates(CiTestCase):
             {'storage': {'version': 1,
                          'config': self.base + self.zfsroots + self.extra}})
         found = block_meta.zfsroot_update_storage_config(scfg)
-        print(util.json_dumps([(k, v) for k, v in found.items()]))
+        print(util.json_dumps(list(found.items())))
         self.assertEqual(expected, found)
 
     def test_basic_zfsroot_raise_valueerror_no_gpt(self):
@@ -632,8 +647,8 @@ class TestFstabData(CiTestCase):
     def _my_gptsv(self, d_id, _scfg):
         """local test replacement for get_path_to_storage_volume."""
         if d_id in ("xda", "xda1"):
-            return "/dev/" + d_id
-        raise RuntimeError("Unexpected call to gptsv with %s" % d_id)
+            return f"/dev/{d_id}"
+        raise RuntimeError(f"Unexpected call to gptsv with {d_id}")
 
     def test_mount_data_raises_valueerror_if_not_mount(self):
         """mount_data on non-mount type raises ValueError."""
@@ -888,7 +903,7 @@ class TestFstabData(CiTestCase):
         fdata = block_meta.FstabData(
             device="/dev/disk2", path="/mnt", fstype='ext4')
         uuid = 'b30d2389-5152-4fbc-8f18-0385ef3046c5'
-        by_uuid = '/dev/disk/by-uuid/' + uuid
+        by_uuid = f'/dev/disk/by-uuid/{uuid}'
         m_uinfo.return_value = {
             'DEVTYPE': 'partition',
             'DEVLINKS': [by_uuid, '/dev/disk/by-foo/wark'],
@@ -1108,7 +1123,7 @@ class TestFstabVolumeSpec(CiTestCase):
         block_type = 'disk'
         bcache_uuid = (
             "/dev/bcache/by-uuid/f36394c0-3cc0-4423-8d6f-ffac130f171a")
-        device = '/dev/bcache' + self.random_string()
+        device = f'/dev/bcache{self.random_string()}'
         DEVLINKS = copy.deepcopy(self.DEVLINK_MAP['bcache'])
         self.m_vtype.return_value = block_type
         self.m_info.return_value = {'DEVLINKS': DEVLINKS}
@@ -1120,7 +1135,7 @@ class TestFstabVolumeSpec(CiTestCase):
                    "md-uuid-20078a26:ee6c756b:55e80044:8f6d01b7")
         device = self.random_string()
         DEVLINKS = copy.deepcopy(self.DEVLINK_MAP['raid'])
-        self.m_vtype.return_value = block_type + '1'
+        self.m_vtype.return_value = f'{block_type}1'
         self.m_info.return_value = {'DEVLINKS': DEVLINKS}
         self.assertEqual(md_uuid, block_meta.get_volume_spec(device))
 
@@ -1131,7 +1146,7 @@ class TestFstabVolumeSpec(CiTestCase):
         device = self.random_string()
         DEVLINKS = copy.deepcopy(self.DEVLINK_MAP['raid'])
         DEVLINKS.remove(md_uuid)
-        self.m_vtype.return_value = block_type + '1'
+        self.m_vtype.return_value = f'{block_type}1'
         self.m_info.return_value = {'DEVLINKS': DEVLINKS}
         self.assertEqual(device, block_meta.get_volume_spec(device))
 
@@ -1416,11 +1431,11 @@ class TestLvmVolgroupHandler(CiTestCase):
         super(TestLvmVolgroupHandler, self).setUp()
 
         basepath = 'curtin.commands.block_meta.'
-        self.add_patch(basepath + 'lvm', 'm_lvm')
-        self.add_patch(basepath + 'util.subp', 'm_subp')
-        self.add_patch(basepath + 'make_dname', 'm_dname')
-        self.add_patch(basepath + 'get_path_to_storage_volume', 'm_getpath')
-        self.add_patch(basepath + 'block.wipe_volume', 'm_wipe')
+        self.add_patch(f'{basepath}lvm', 'm_lvm')
+        self.add_patch(f'{basepath}util.subp', 'm_subp')
+        self.add_patch(f'{basepath}make_dname', 'm_dname')
+        self.add_patch(f'{basepath}get_path_to_storage_volume', 'm_getpath')
+        self.add_patch(f'{basepath}block.wipe_volume', 'm_wipe')
 
         self.target = "my_target"
         self.config = {
@@ -1514,12 +1529,12 @@ class TestLvmPartitionHandler(CiTestCase):
         super(TestLvmPartitionHandler, self).setUp()
 
         basepath = 'curtin.commands.block_meta.'
-        self.add_patch(basepath + 'lvm', 'm_lvm')
-        self.add_patch(basepath + 'distro', 'm_distro')
-        self.add_patch(basepath + 'util.subp', 'm_subp')
-        self.add_patch(basepath + 'make_dname', 'm_dname')
-        self.add_patch(basepath + 'get_path_to_storage_volume', 'm_getpath')
-        self.add_patch(basepath + 'block.wipe_volume', 'm_wipe')
+        self.add_patch(f'{basepath}lvm', 'm_lvm')
+        self.add_patch(f'{basepath}distro', 'm_distro')
+        self.add_patch(f'{basepath}util.subp', 'm_subp')
+        self.add_patch(f'{basepath}make_dname', 'm_dname')
+        self.add_patch(f'{basepath}get_path_to_storage_volume', 'm_getpath')
+        self.add_patch(f'{basepath}block.wipe_volume', 'm_wipe')
 
         self.target = "my_target"
         self.config = {
@@ -1547,7 +1562,7 @@ class TestLvmPartitionHandler(CiTestCase):
         self.m_distro.lsb_release.return_value = {'codename': 'bionic'}
         lv_size = self.storage_config['lvm-part1']['size']
         self.assertEqual(int, type(lv_size))
-        expected_size_str = "%sB" % util.human2bytes(lv_size)
+        expected_size_str = f"{util.human2bytes(lv_size)}B"
 
         block_meta.lvm_partition_handler(self.storage_config['lvm-part1'],
                                          self.storage_config, {})
@@ -1641,12 +1656,11 @@ class TestDmCryptHandler(CiTestCase):
         super(TestDmCryptHandler, self).setUp()
 
         basepath = 'curtin.commands.block_meta.'
-        self.add_patch(basepath + 'get_path_to_storage_volume', 'm_getpath')
-        self.add_patch(basepath + 'util.load_command_environment',
-                       'm_load_env')
-        self.add_patch(basepath + 'util.which', 'm_which')
-        self.add_patch(basepath + 'util.subp', 'm_subp')
-        self.add_patch(basepath + 'block', 'm_block')
+        self.add_patch(f'{basepath}get_path_to_storage_volume', 'm_getpath')
+        self.add_patch(f'{basepath}util.load_command_environment', 'm_load_env')
+        self.add_patch(f'{basepath}util.which', 'm_which')
+        self.add_patch(f'{basepath}util.subp', 'm_subp')
+        self.add_patch(f'{basepath}block', 'm_block')
 
         self.target = "my_target"
         self.keyfile = self.random_string()
@@ -1731,23 +1745,58 @@ class TestDmCryptHandler(CiTestCase):
         self.m_which.return_value = "/my/path/to/zkey"
         volume_path = self.random_string()
         self.m_getpath.return_value = volume_path
-        volume_byid = "/dev/disk/by-id/ccw-%s" % volume_path
+        volume_byid = f"/dev/disk/by-id/ccw-{volume_path}"
         self.m_block.disk_to_byid_path.return_value = volume_byid
 
         info = self.storage_config['dmcrypt0']
-        volume_name = "%s:%s" % (volume_byid, info['dm_name'])
+        volume_name = f"{volume_byid}:{info['dm_name']}"
         block_meta.dm_crypt_handler(info, self.storage_config, {})
         expected_calls = [
-            call(['zkey', 'generate', '--xts', '--volume-type', 'luks2',
-                  '--sector-size', '4096', '--name', info['dm_name'],
-                  '--description',
-                  'curtin generated zkey for %s' % volume_name,
-                  '--volumes', volume_name], capture=True),
-            call(['zkey', 'cryptsetup', '--run', '--volumes', volume_byid,
-                  '--batch-mode', '--key-file', self.keyfile], capture=True),
-            call(['cryptsetup', 'open', '--type', 'luks2', volume_path,
-                  info['dm_name'], '--key-file', self.keyfile]),
+            call(
+                [
+                    'zkey',
+                    'generate',
+                    '--xts',
+                    '--volume-type',
+                    'luks2',
+                    '--sector-size',
+                    '4096',
+                    '--name',
+                    info['dm_name'],
+                    '--description',
+                    f'curtin generated zkey for {volume_name}',
+                    '--volumes',
+                    volume_name,
+                ],
+                capture=True,
+            ),
+            call(
+                [
+                    'zkey',
+                    'cryptsetup',
+                    '--run',
+                    '--volumes',
+                    volume_byid,
+                    '--batch-mode',
+                    '--key-file',
+                    self.keyfile,
+                ],
+                capture=True,
+            ),
+            call(
+                [
+                    'cryptsetup',
+                    'open',
+                    '--type',
+                    'luks2',
+                    volume_path,
+                    info['dm_name'],
+                    '--key-file',
+                    self.keyfile,
+                ]
+            ),
         ]
+
         self.m_subp.assert_has_calls(expected_calls)
         self.assertEqual(len(util.load_file(self.crypttab).splitlines()), 1)
 
@@ -1766,24 +1815,57 @@ class TestDmCryptHandler(CiTestCase):
 
         volume_path = self.random_string()
         self.m_getpath.return_value = volume_path
-        volume_byid = "/dev/disk/by-id/ccw-%s" % volume_path
+        volume_byid = f"/dev/disk/by-id/ccw-{volume_path}"
         self.m_block.disk_to_byid_path.return_value = volume_byid
 
         info = self.storage_config['dmcrypt0']
-        volume_name = "%s:%s" % (volume_byid, info['dm_name'])
+        volume_name = f"{volume_byid}:{info['dm_name']}"
         block_meta.dm_crypt_handler(info, self.storage_config, {})
         expected_calls = [
-            call(['zkey', 'generate', '--xts', '--volume-type', 'luks2',
-                  '--sector-size', '4096', '--name', info['dm_name'],
-                  '--description',
-                  'curtin generated zkey for %s' % volume_name,
-                  '--volumes', volume_name], capture=True),
-            call(['cryptsetup', '--cipher', self.cipher,
-                  '--key-size', self.keysize,
-                  'luksFormat', volume_path, self.keyfile]),
-            call(['cryptsetup', 'open', '--type', 'luks', volume_path,
-                  info['dm_name'], '--key-file', self.keyfile])
+            call(
+                [
+                    'zkey',
+                    'generate',
+                    '--xts',
+                    '--volume-type',
+                    'luks2',
+                    '--sector-size',
+                    '4096',
+                    '--name',
+                    info['dm_name'],
+                    '--description',
+                    f'curtin generated zkey for {volume_name}',
+                    '--volumes',
+                    volume_name,
+                ],
+                capture=True,
+            ),
+            call(
+                [
+                    'cryptsetup',
+                    '--cipher',
+                    self.cipher,
+                    '--key-size',
+                    self.keysize,
+                    'luksFormat',
+                    volume_path,
+                    self.keyfile,
+                ]
+            ),
+            call(
+                [
+                    'cryptsetup',
+                    'open',
+                    '--type',
+                    'luks',
+                    volume_path,
+                    info['dm_name'],
+                    '--key-file',
+                    self.keyfile,
+                ]
+            ),
         ]
+
         self.m_subp.assert_has_calls(expected_calls)
         self.assertEqual(len(util.load_file(self.crypttab).splitlines()), 1)
 
@@ -1803,26 +1885,70 @@ class TestDmCryptHandler(CiTestCase):
 
         volume_path = self.random_string()
         self.m_getpath.return_value = volume_path
-        volume_byid = "/dev/disk/by-id/ccw-%s" % volume_path
+        volume_byid = f"/dev/disk/by-id/ccw-{volume_path}"
         self.m_block.disk_to_byid_path.return_value = volume_byid
 
         info = self.storage_config['dmcrypt0']
-        volume_name = "%s:%s" % (volume_byid, info['dm_name'])
+        volume_name = f"{volume_byid}:{info['dm_name']}"
         block_meta.dm_crypt_handler(info, self.storage_config, {})
         expected_calls = [
-            call(['zkey', 'generate', '--xts', '--volume-type', 'luks2',
-                  '--sector-size', '4096', '--name', info['dm_name'],
-                  '--description',
-                  'curtin generated zkey for %s' % volume_name,
-                  '--volumes', volume_name], capture=True),
-            call(['zkey', 'cryptsetup', '--run', '--volumes', volume_byid,
-                  '--batch-mode', '--key-file', self.keyfile], capture=True),
-            call(['cryptsetup', '--cipher', self.cipher,
-                  '--key-size', self.keysize,
-                  'luksFormat', volume_path, self.keyfile]),
-            call(['cryptsetup', 'open', '--type', 'luks', volume_path,
-                  info['dm_name'], '--key-file', self.keyfile])
+            call(
+                [
+                    'zkey',
+                    'generate',
+                    '--xts',
+                    '--volume-type',
+                    'luks2',
+                    '--sector-size',
+                    '4096',
+                    '--name',
+                    info['dm_name'],
+                    '--description',
+                    f'curtin generated zkey for {volume_name}',
+                    '--volumes',
+                    volume_name,
+                ],
+                capture=True,
+            ),
+            call(
+                [
+                    'zkey',
+                    'cryptsetup',
+                    '--run',
+                    '--volumes',
+                    volume_byid,
+                    '--batch-mode',
+                    '--key-file',
+                    self.keyfile,
+                ],
+                capture=True,
+            ),
+            call(
+                [
+                    'cryptsetup',
+                    '--cipher',
+                    self.cipher,
+                    '--key-size',
+                    self.keysize,
+                    'luksFormat',
+                    volume_path,
+                    self.keyfile,
+                ]
+            ),
+            call(
+                [
+                    'cryptsetup',
+                    'open',
+                    '--type',
+                    'luks',
+                    volume_path,
+                    info['dm_name'],
+                    '--key-file',
+                    self.keyfile,
+                ]
+            ),
         ]
+
         self.m_subp.assert_has_calls(expected_calls)
         self.assertEqual(len(util.load_file(self.crypttab).splitlines()), 1)
 
@@ -1896,12 +2022,12 @@ class TestRaidHandler(CiTestCase):
 
         orig_md_path = block_meta.block.md_path
         basepath = 'curtin.commands.block_meta.'
-        self.add_patch(basepath + 'get_path_to_storage_volume', 'm_getpath')
-        self.add_patch(basepath + 'util', 'm_util')
-        self.add_patch(basepath + 'make_dname', 'm_dname')
-        self.add_patch(basepath + 'mdadm', 'm_mdadm')
-        self.add_patch(basepath + 'block', 'm_block')
-        self.add_patch(basepath + 'udevadm_settle', 'm_uset')
+        self.add_patch(f'{basepath}get_path_to_storage_volume', 'm_getpath')
+        self.add_patch(f'{basepath}util', 'm_util')
+        self.add_patch(f'{basepath}make_dname', 'm_dname')
+        self.add_patch(f'{basepath}mdadm', 'm_mdadm')
+        self.add_patch(f'{basepath}block', 'm_block')
+        self.add_patch(f'{basepath}udevadm_settle', 'm_uset')
 
         # The behavior of this function is being directly tested in
         # these tests, so we can't mock it
@@ -1995,8 +2121,7 @@ class TestRaidHandler(CiTestCase):
             self.assertEqual(
                 expected,
                 actual,
-                "Expected {} to result in mdadm being called with {}. "
-                "mdadm instead called with {}".format(param, expected, actual)
+                f"Expected {param} to result in mdadm being called with {expected}. mdadm instead called with {actual}",
             )
 
     def test_raid_handler(self):
@@ -2100,12 +2225,12 @@ class TestBcacheHandler(CiTestCase):
         super(TestBcacheHandler, self).setUp()
 
         basepath = 'curtin.commands.block_meta.'
-        self.add_patch(basepath + 'get_path_to_storage_volume', 'm_getpath')
-        self.add_patch(basepath + 'util', 'm_util')
-        self.add_patch(basepath + 'make_dname', 'm_dname')
-        self.add_patch(basepath + 'bcache', 'm_bcache')
-        self.add_patch(basepath + 'block', 'm_block')
-        self.add_patch(basepath + 'disk_handler', 'm_disk_handler')
+        self.add_patch(f'{basepath}get_path_to_storage_volume', 'm_getpath')
+        self.add_patch(f'{basepath}util', 'm_util')
+        self.add_patch(f'{basepath}make_dname', 'm_dname')
+        self.add_patch(f'{basepath}bcache', 'm_bcache')
+        self.add_patch(f'{basepath}block', 'm_block')
+        self.add_patch(f'{basepath}disk_handler', 'm_disk_handler')
 
         self.target = "my_target"
         self.config = {
@@ -2193,13 +2318,13 @@ class TestPartitionHandler(CiTestCase):
         super(TestPartitionHandler, self).setUp()
 
         basepath = 'curtin.commands.block_meta.'
-        self.add_patch(basepath + 'get_path_to_storage_volume', 'm_getpath')
-        self.add_patch(basepath + 'util', 'm_util')
-        self.add_patch(basepath + 'make_dname', 'm_dname')
-        self.add_patch(basepath + 'block', 'm_block')
-        self.add_patch(basepath + 'multipath', 'm_mp')
-        self.add_patch(basepath + 'udevadm_settle', 'm_uset')
-        self.add_patch(basepath + 'udevadm_info', 'm_uinfo')
+        self.add_patch(f'{basepath}get_path_to_storage_volume', 'm_getpath')
+        self.add_patch(f'{basepath}util', 'm_util')
+        self.add_patch(f'{basepath}make_dname', 'm_dname')
+        self.add_patch(f'{basepath}block', 'm_block')
+        self.add_patch(f'{basepath}multipath', 'm_mp')
+        self.add_patch(f'{basepath}udevadm_settle', 'm_uset')
+        self.add_patch(f'{basepath}udevadm_info', 'm_uinfo')
 
         self.target = "my_target"
         self.config = {

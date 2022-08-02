@@ -92,9 +92,9 @@ class TestEnableDisableUpdateInitramfs(CiTestCase):
     def setUp(self):
         super(TestEnableDisableUpdateInitramfs, self).setUp()
         ccc = 'curtin.commands.curthooks'
-        self.add_patch(ccc + '.util.subp', 'mock_subp')
-        self.add_patch(ccc + '.util.which', 'mock_which')
-        self.add_patch(ccc + '.platform.machine', 'mock_machine')
+        self.add_patch(f'{ccc}.util.subp', 'mock_subp')
+        self.add_patch(f'{ccc}.util.which', 'mock_which')
+        self.add_patch(f'{ccc}.platform.machine', 'mock_machine')
         self.target = self.tmp_dir()
         self.mock_machine.return_value = 'x86_64'
         self.update_initramfs = '/usr/sbin/update-initramfs'
@@ -112,10 +112,20 @@ class TestEnableDisableUpdateInitramfs(CiTestCase):
         self.mock_subp.side_effect = iter([('', '')] * 10)
         curthooks.disable_update_initramfs({}, self.target)
         self.assertIn(
-            call(['dpkg-divert', '--add', '--rename', '--divert',
-                  self.update_initramfs + '.curtin-disabled',
-                  self.update_initramfs], target=self.target),
-            self.mock_subp.call_args_list)
+            call(
+                [
+                    'dpkg-divert',
+                    '--add',
+                    '--rename',
+                    '--divert',
+                    f'{self.update_initramfs}.curtin-disabled',
+                    self.update_initramfs,
+                ],
+                target=self.target,
+            ),
+            self.mock_subp.call_args_list,
+        )
+
         self.assertEqual([call('update-initramfs', target=self.target)],
                          self.mock_which.call_args_list)
 
@@ -137,10 +147,13 @@ class TestEnableDisableUpdateInitramfs(CiTestCase):
 
     def test_update_initramfs_is_disabled_true_if_diverted(self):
         binary = 'update-initramfs'
-        dpkg_divert_output = "\n".join([
-            'diversion of foobar to wark',
-            ('local diversion of %s to %s.curtin-disabled' % (binary, binary))
-        ])
+        dpkg_divert_output = "\n".join(
+            [
+                'diversion of foobar to wark',
+                f'local diversion of {binary} to {binary}.curtin-disabled',
+            ]
+        )
+
         self.mock_subp.return_value = (dpkg_divert_output, '')
         self.assertTrue(
             curthooks.update_initramfs_is_disabled(self.target))
@@ -170,9 +183,20 @@ class TestEnableDisableUpdateInitramfs(CiTestCase):
         for tool in tools:
             tname = os.path.basename(tool)
             self.assertIn(
-                call(['dpkg-divert', '--add', '--rename', '--divert',
-                      tool + '.curtin-disabled', tool], target=self.target),
-                self.mock_subp.call_args_list)
+                call(
+                    [
+                        'dpkg-divert',
+                        '--add',
+                        '--rename',
+                        '--divert',
+                        f'{tool}.curtin-disabled',
+                        tool,
+                    ],
+                    target=self.target,
+                ),
+                self.mock_subp.call_args_list,
+            )
+
             lhs = [call(tname, target=self.target)]
             self.assertIn(lhs, self.mock_which.call_args_list)
 
@@ -207,22 +231,24 @@ class TestUpdateInitramfs(CiTestCase):
         os.makedirs(self.boot)
         self.kversion = '5.3.0-generic'
         # create an installed kernel file
-        with open(os.path.join(self.boot, 'vmlinuz-' + self.kversion), 'w'):
+        with open(os.path.join(self.boot, f'vmlinuz-{self.kversion}'), 'w'):
             pass
         self.mounts = ['dev', 'proc', 'run', 'sys']
 
     def _mnt_call(self, point):
         target = os.path.join(self.target, point)
-        return call(['mount', '--bind', '/%s' % point, target])
+        return call(['mount', '--bind', f'/{point}', target])
 
     def _side_eff(self, cmd_out=None, cmd_err=None):
         if cmd_out is None:
             cmd_out = ''
         if cmd_err is None:
             cmd_err = ''
-        effects = ([('mount', '')] * len(self.mounts) +
-                   [(cmd_out, cmd_err)] + [('settle', '')])
-        return effects
+        return (
+            [('mount', '')] * len(self.mounts)
+            + [(cmd_out, cmd_err)]
+            + [('settle', '')]
+        )
 
     def _subp_calls(self, mycall):
         pre = [self._mnt_call(point) for point in self.mounts]
@@ -232,10 +258,13 @@ class TestUpdateInitramfs(CiTestCase):
     def test_does_nothing_if_binary_diverted(self):
         self.mock_which.return_value = None
         binary = 'update-initramfs'
-        dpkg_divert_output = "\n".join([
-            'diversion of foobar to wark',
-            ('local diversion of %s to %s.curtin-disabled' % (binary, binary))
-        ])
+        dpkg_divert_output = "\n".join(
+            [
+                'diversion of foobar to wark',
+                f'local diversion of {binary} to {binary}.curtin-disabled',
+            ]
+        )
+
         self.mock_subp.side_effect = (
             iter(self._side_eff(cmd_out=dpkg_divert_output)))
         curthooks.update_initramfs(self.target)
@@ -260,10 +289,10 @@ class TestUpdateInitramfs(CiTestCase):
 
     def test_mounts_and_runs_for_all_kernels(self):
         kversion2 = '5.4.0-generic'
-        with open(os.path.join(self.boot, 'vmlinuz-' + kversion2), 'w'):
+        with open(os.path.join(self.boot, f'vmlinuz-{kversion2}'), 'w'):
             pass
         kversion3 = '5.4.1-ppc64le'
-        with open(os.path.join(self.boot, 'vmlinux-' + kversion3), 'w'):
+        with open(os.path.join(self.boot, f'vmlinux-{kversion3}'), 'w'):
             pass
         effects = self._side_eff() * 4
         self.mock_subp.side_effect = iter(effects)
@@ -284,10 +313,10 @@ class TestUpdateInitramfs(CiTestCase):
 
     def test_calls_update_if_initrd_exists_else_create(self):
         kversion2 = '5.2.0-generic'
-        with open(os.path.join(self.boot, 'vmlinuz-' + kversion2), 'w'):
+        with open(os.path.join(self.boot, f'vmlinuz-{kversion2}'), 'w'):
             pass
         # an existing initrd
-        with open(os.path.join(self.boot, 'initrd.img-' + kversion2), 'w'):
+        with open(os.path.join(self.boot, f'initrd.img-{kversion2}'), 'w'):
             pass
 
         effects = self._side_eff() * 3
@@ -432,10 +461,13 @@ class TestInstallMissingPkgs(CiTestCase):
         arch = 'amd64'
         self.mock_arch.return_value = arch
         self.mock_machine.return_value = 'x86_64'
-        expected_pkgs = ['efibootmgr',
-                         'grub-efi-%s' % arch,
-                         'grub-efi-%s-signed' % arch,
-                         'shim-signed']
+        expected_pkgs = [
+            'efibootmgr',
+            f'grub-efi-{arch}',
+            f'grub-efi-{arch}-signed',
+            'shim-signed',
+        ]
+
         self.mock_machine.return_value = 'x86_64'
         self.mock_uefi.return_value = True
         self.mock_haspkg.return_value = True
@@ -464,7 +496,7 @@ class TestInstallMissingPkgs(CiTestCase):
         arch = 'arm64'
         self.mock_arch.return_value = arch
         self.mock_machine.return_value = 'aarch64'
-        expected_pkgs = ['efibootmgr', 'grub-efi-%s' % arch]
+        expected_pkgs = ['efibootmgr', f'grub-efi-{arch}']
         self.mock_uefi.return_value = True
         target = "not-a-real-target"
         cfg = {}
@@ -551,7 +583,7 @@ class TestSetupZipl(CiTestCase):
             '# This has been modified by the MAAS curtin installer',
             content)
         # validate the root= parameter was properly set in the cmdline
-        self.assertIn('root={}'.format(root_dev), content)
+        self.assertIn(f'root={root_dev}', content)
 
 
 class EfiOutput(object):
@@ -560,7 +592,7 @@ class EfiOutput(object):
         self.entries = {}
         if entries:
             for entry in entries:
-                self.entries.update(entry)
+                self.entries |= entry
         self.current = current
         self.order = order
         if not order and self.entries:
@@ -1034,11 +1066,17 @@ class TestSetupGrub(CiTestCase):
                              variant=self.variant)
         logs = self.logs.getvalue()
         print(logs)
-        print('Number of bootmgr calls: %s' % self.mock_efibootmgr.call_count)
-        self.assertEquals([
-            call(['efibootmgr', '-o', '%s' % (",".join(expected_order))],
-                 target=self.target)],
-            self.mock_subp.call_args_list)
+        print(f'Number of bootmgr calls: {self.mock_efibootmgr.call_count}')
+        self.assertEquals(
+            [
+                call(
+                    ['efibootmgr', '-o', f'{",".join(expected_order)}'],
+                    target=self.target,
+                )
+            ],
+            self.mock_subp.call_args_list,
+        )
+
         self.assertIn("Using fallback UEFI reordering:", logs)
         self.assertIn("missing 'BootCurrent' value", logs)
         self.assertIn("Looking for installed entry variant=", logs)
@@ -1459,8 +1497,11 @@ class TestDetectRequiredPackages(CiTestCase):
             print('test_config:\n%s' % config.dump_config(cfg))
             print()
             actual_reqs = curthooks.detect_required_packages(cfg)
-            self.assertEqual(set(actual_reqs), set(expected_reqs),
-                             'failed for config: {}'.format(config_items))
+            self.assertEqual(
+                set(actual_reqs),
+                set(expected_reqs),
+                f'failed for config: {config_items}',
+            )
 
     def test_storage_v1_detect(self):
         self._test_req_mappings((
@@ -1601,8 +1642,9 @@ class TestCurthooksWriteFiles(CiTestCase):
                'foobar': {'path': '/sys/wark', 'content': "Engauge!\n"}}
         curthooks.write_files({'write_files': cfg}, tmpd)
         self.assertEqual(
-            dict((cfg[i]['path'], cfg[i]['content']) for i in cfg.keys()),
-            dir2dict(tmpd, prefix=tmpd))
+            {cfg[i]['path']: cfg[i]['content'] for i in cfg},
+            dir2dict(tmpd, prefix=tmpd),
+        )
 
     @patch('curtin.commands.curthooks.paths.target_path')
     @patch('curtin.commands.curthooks.futil.write_finfo')
@@ -1799,9 +1841,12 @@ class TestCurthooksChzdev(CiTestCase):
         self.assertEqual(1, m_chz_prepare.call_count)
         self.assertEqual(1, m_chz_import.call_count)
         m_chz_prepare.assert_called_with(export_value)
-        m_chz_import.assert_called_with(data=import_value,
-                                        persistent=True, noroot=True,
-                                        base={'/etc': self.target + '/etc'})
+        m_chz_import.assert_called_with(
+            data=import_value,
+            persistent=True,
+            noroot=True,
+            base={'/etc': f'{self.target}/etc'},
+        )
 
     def test_export_defaults_to_stdout(self):
         """chzdev_export returns (stdout, stderr) from subp."""
@@ -1858,9 +1903,19 @@ class TestCurthooksChzdev(CiTestCase):
         myval = self.random_string()
         curthooks.chzdev_import(data=self.chzdev_import, base={mykey: myval})
         self.m_subp.assert_called_with(
-            ['chzdev', '--quiet', '--persistent', '--no-root-update',
-             '--base', '%s=%s' % (mykey, myval),
-             '--import', '-'], data=self.chzdev_import.encode(), capture=True)
+            [
+                'chzdev',
+                '--quiet',
+                '--persistent',
+                '--no-root-update',
+                '--base',
+                f'{mykey}={myval}',
+                '--import',
+                '-',
+            ],
+            data=self.chzdev_import.encode(),
+            capture=True,
+        )
 
     def test_import_sets_base_param_from_string(self):
         """chzdev_import passed --base value for string input."""
@@ -1920,16 +1975,14 @@ class TestCurthooksGrubDebconf(CiTestCase):
     def setUp(self):
         super(TestCurthooksGrubDebconf, self).setUp()
         base = 'curtin.commands.curthooks.'
-        self.add_patch(
-            base + 'apt_config.apply_debconf_selections', 'm_debconf')
-        self.add_patch(base + 'block.disk_to_byid_path', 'm_byid')
+        self.add_patch(f'{base}apt_config.apply_debconf_selections', 'm_debconf')
+        self.add_patch(f'{base}block.disk_to_byid_path', 'm_byid')
 
     def test_debconf_multiselect(self):
         package = self.random_string()
-        variable = "%s/%s" % (self.random_string(), self.random_string())
-        choices = [c for c in self.random_string()]
-        expected = "%s %s multiselect %s" % (package, variable,
-                                             ", ".join(choices))
+        variable = f"{self.random_string()}/{self.random_string()}"
+        choices = list(self.random_string())
+        expected = f'{package} {variable} multiselect {", ".join(choices)}'
         self.assertEqual(expected,
                          curthooks._debconf_multiselect(package, variable,
                                                         choices))
@@ -1937,9 +1990,9 @@ class TestCurthooksGrubDebconf(CiTestCase):
     def test_configure_grub_debconf(self):
         target = self.random_string()
         boot_devs = [self.random_string()]
-        byid_boot_devs = ["/dev/disk/by-id/" + dev for dev in boot_devs]
+        byid_boot_devs = [f"/dev/disk/by-id/{dev}" for dev in boot_devs]
         uefi = False
-        self.m_byid.side_effect = (lambda x: '/dev/disk/by-id/' + x)
+        self.m_byid.side_effect = lambda x: f'/dev/disk/by-id/{x}'
         curthooks.configure_grub_debconf(boot_devs, target, uefi)
         expected_selection = [
             ('grub-pc grub-pc/install_devices '
@@ -1952,9 +2005,9 @@ class TestCurthooksGrubDebconf(CiTestCase):
     def test_configure_grub_debconf_uefi_enabled(self):
         target = self.random_string()
         boot_devs = [self.random_string()]
-        byid_boot_devs = ["/dev/disk/by-id/" + dev for dev in boot_devs]
+        byid_boot_devs = [f"/dev/disk/by-id/{dev}" for dev in boot_devs]
         uefi = True
-        self.m_byid.side_effect = (lambda x: '/dev/disk/by-id/' + x)
+        self.m_byid.side_effect = lambda x: f'/dev/disk/by-id/{x}'
         curthooks.configure_grub_debconf(boot_devs, target, uefi)
         expected_selection = [
             ('grub-pc grub-efi/install_devices '
@@ -1969,7 +2022,9 @@ class TestCurthooksGrubDebconf(CiTestCase):
         boot_devs = ['aaaaa', 'bbbbb']
         uefi = True
         self.m_byid.side_effect = (
-                lambda x: ('/dev/disk/by-id/' + x if 'a' in x else None))
+            lambda x: f'/dev/disk/by-id/{x}' if 'a' in x else None
+        )
+
         curthooks.configure_grub_debconf(boot_devs, target, uefi)
         expected_selection = [
             ('grub-pc grub-efi/install_devices '

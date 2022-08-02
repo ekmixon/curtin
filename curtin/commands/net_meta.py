@@ -42,15 +42,16 @@ def resolve_alias(alias):
 def interfaces_basic_dhcp(devices, macs=None):
     # return network configuration that says to dhcp on provided devices
     if macs is None:
-        macs = {}
-        for dev in devices:
-            macs[dev] = net.get_interface_mac(dev)
-
-    config = []
-    for dev in devices:
-        config.append({
-            'type': 'physical', 'name': dev, 'mac_address': macs.get(dev),
-            'subnets': [{'type': 'dhcp4'}]})
+        macs = {dev: net.get_interface_mac(dev) for dev in devices}
+    config = [
+        {
+            'type': 'physical',
+            'name': dev,
+            'mac_address': macs.get(dev),
+            'subnets': [{'type': 'dhcp4'}],
+        }
+        for dev in devices
+    ]
 
     return {'network': {'version': 1, 'config': config}}
 
@@ -59,12 +60,11 @@ def interfaces_custom(args):
     state = util.load_command_environment()
     cfg = config.load_command_config(args, state)
 
-    network_config = cfg.get('network', [])
-    if not network_config:
+    if network_config := cfg.get('network', []):
+        return {'network': network_config}
+    else:
         raise Exception("network configuration is required by mode '%s' "
                         "but not provided in the config file" % 'custom')
-
-    return {'network': network_config}
 
 
 def net_meta(args):
@@ -86,22 +86,18 @@ def net_meta(args):
     if cfg.get("network") is not None:
         args.mode = "custom"
 
-    eni = "etc/network/interfaces"
     if args.mode == "auto":
         if not args.devices:
             args.devices = ["connected"]
 
         t_eni = None
         if args.target:
+            eni = "etc/network/interfaces"
             t_eni = os.path.sep.join((args.target, eni,))
             if not os.path.isfile(t_eni):
                 t_eni = None
 
-        if t_eni:
-            args.mode = "copy"
-        else:
-            args.mode = "dhcp"
-
+        args.mode = "copy" if t_eni else "dhcp"
     devices = []
     if args.devices:
         for dev in args.devices:

@@ -24,8 +24,12 @@ def network_config_required_packages(network_config, mapping=None):
     # v1 has 'config' key and uses type: devtype elements
     if 'config' in network_config:
         netconf = network_config['config']
-        dev_configs = set() if netconf == 'disabled' else set(
-            device['type'] for device in netconf)
+        dev_configs = (
+            set()
+            if netconf == 'disabled'
+            else {device['type'] for device in netconf}
+        )
+
 
     else:
         # v2 has no config key
@@ -77,7 +81,7 @@ def detect_required_packages_mapping(osfamily=DISTROS.debian):
             'vlans': []},
     }
     if osfamily not in distro_mapping:
-        raise ValueError('No net package mapping for distro: %s' % osfamily)
+        raise ValueError(f'No net package mapping for distro: {osfamily}')
 
     return {1: {'handler': network_config_required_packages,
                 'mapping': distro_mapping.get(osfamily)},

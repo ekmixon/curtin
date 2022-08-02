@@ -82,8 +82,12 @@ class TestBlock(CiTestCase):
     def test_lookup_disk(self, mock_os_listdir, mock_os_path_exists,
                          mock_os_path_realpath, mock_mpath):
         serial = "SERIAL123"
-        mock_os_listdir.return_value = ["sda_%s-part1" % serial,
-                                        "sda_%s" % serial, "other"]
+        mock_os_listdir.return_value = [
+            f"sda_{serial}-part1",
+            f"sda_{serial}",
+            "other",
+        ]
+
         mock_os_path_exists.return_value = True
         mock_os_path_realpath.return_value = "/dev/sda"
         mock_mpath.is_mpath_device.return_value = False
@@ -92,8 +96,7 @@ class TestBlock(CiTestCase):
         path = block.lookup_disk(serial)
 
         mock_os_listdir.assert_called_with("/dev/disk/by-id/")
-        mock_os_path_realpath.assert_called_with("/dev/disk/by-id/sda_%s" %
-                                                 serial)
+        mock_os_path_realpath.assert_called_with(f"/dev/disk/by-id/sda_{serial}")
         self.assertTrue(mock_os_path_exists.called)
         self.assertEqual(path, "/dev/sda")
 
@@ -113,7 +116,7 @@ class TestBlock(CiTestCase):
     def test_lookup_disk_find_wwn(self, mock_os_listdir, mock_os_path_exists,
                                   mock_os_path_realpath, mock_mpath):
         wwn = "eui.0025388b710116a1"
-        expected_link = 'nvme-%s' % wwn
+        expected_link = f'nvme-{wwn}'
         device = '/wark/nvme0n1'
         mock_os_listdir.return_value = [
             "nvme-eui.0025388b710116a1",
@@ -256,19 +259,19 @@ class TestWipeFile(CiTestCase):
         try:
             p = self.tmp_path("enofile")
             block.wipe_file(p)
-            raise Exception("%s did not raise exception" % p)
+            raise Exception(f"{p} did not raise exception")
         except Exception as e:
             if not util.is_file_not_found_exc(e):
-                raise Exception("exc was not file_not_found: %s" % e)
+                raise Exception(f"exc was not file_not_found: {e}")
 
     def test_non_exist_dir_raises_file_not_found(self):
         try:
             p = self.tmp_path(os.path.sep.join(["enodir", "file"]))
             block.wipe_file(p)
-            raise Exception("%s did not raise exception" % p)
+            raise Exception(f"{p} did not raise exception")
         except Exception as e:
             if not util.is_file_not_found_exc(e):
-                raise Exception("exc was not file_not_found: %s" % e)
+                raise Exception(f"exc was not file_not_found: {e}")
 
     def test_default_is_zero(self):
         flen = 1024
@@ -294,10 +297,10 @@ class TestWipeFile(CiTestCase):
     def test_reader_twice(self):
         flen = 37
         data = {'x': 20 * b'a' + 20 * b'b'}
-        expected = data['x'][0:flen]
+        expected = data['x'][:flen]
 
         def reader(size):
-            buf = data['x'][0:size]
+            buf = data['x'][:size]
             data['x'] = data['x'][size:]
             return buf
 
@@ -310,7 +313,7 @@ class TestWipeFile(CiTestCase):
     def test_reader_fhandle(self):
         srcfile = self.tmp_path("fhandle_src")
         trgfile = self.tmp_path("fhandle_trg")
-        data = '\n'.join(["this is source file." for f in range(0, 10)] + [])
+        data = '\n'.join(["this is source file." for _ in range(10)] + [])
         util.write_file(srcfile, data)
         util.write_file(trgfile, 'a' * len(data))
         with open(srcfile, "rb") as fp:
@@ -446,9 +449,8 @@ class TestBlockKnames(CiTestCase):
 
         # we need to convert the -part path to the real dm value
         def _my_realp(pp):
-            if pp.startswith(dm0_link):
-                return 'dm-1'
-            return pp
+            return 'dm-1' if pp.startswith(dm0_link) else pp
+
         m_realp.side_effect = _my_realp
         part_knames = [(('sda', 1), 'sda1'),
                        (('vda', 1), 'vda1'),
@@ -525,7 +527,7 @@ class TestPartTableSignature(CiTestCase):
             util.ProcessExecutionError(stdout="", stderr="", exit_code=1)])
 
     def _test_util_load_file(self, content, device, read_len, offset, decode):
-        return (bytes if not decode else str)(content[offset:offset+read_len])
+        return (str if decode else bytes)(content[offset:offset+read_len])
 
     @mock.patch('curtin.block.check_dos_signature')
     @mock.patch('curtin.block.check_efi_signature')

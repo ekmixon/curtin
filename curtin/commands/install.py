@@ -28,8 +28,10 @@ ERROR_TARFILE = '/var/log/curtin/curtin-error-logs.tar'
 SAVE_INSTALL_LOG = '/root/curtin-install.log'
 SAVE_INSTALL_CONFIG = '/root/curtin-install-cfg.yaml'
 
-INSTALL_START_MSG = ("curtin: Installation started. (%s)" %
-                     version.version_string())
+INSTALL_START_MSG = (
+    f"curtin: Installation started. ({version.version_string()})"
+)
+
 INSTALL_PASS_MSG = "curtin: Installation finished."
 INSTALL_FAIL_MSG = "curtin: Installation failed with exception: {exception}"
 
@@ -76,7 +78,7 @@ def copy_install_log(logfile, target, log_target_path):
         LOG.warn(basemsg)
         return
     if not os.path.isfile(logfile):
-        LOG.warn(basemsg + "  file does not exist.")
+        LOG.warn(f"{basemsg}  file does not exist.")
         return
 
     LOG.debug('Copying curtin install log from %s to target/%s',
@@ -180,8 +182,11 @@ class Stage(object):
 
         if reportstack is None:
             reportstack = events.ReportEventStack(
-                name="stage-%s" % name, description="basic stage %s" % name,
-                reporting_enabled=False)
+                name=f"stage-{name}",
+                description=f"basic stage {name}",
+                reporting_enabled=False,
+            )
+
         self.reportstack = reportstack
 
     def _open_install_log(self, logfile):
@@ -266,7 +271,7 @@ def apply_power_state(pstate):
             util.subp(cmd)
             os._exit(0)
         except Exception as e:
-            LOG.warn("%s returned non-zero: %s" % (cmd, e))
+            LOG.warn(f"{cmd} returned non-zero: {e}")
             os._exit(1)
     return
 
@@ -283,14 +288,16 @@ def load_power_state(pstate):
 
     mode = pstate.get("mode")
     if mode not in opt_map:
-        raise TypeError("power_state[mode] required, must be one of: %s." %
-                        ','.join(opt_map.keys()))
+        raise TypeError(
+            f"power_state[mode] required, must be one of: {','.join(opt_map.keys())}."
+        )
+
 
     delay = pstate.get("delay", "5")
     if delay == "now":
         delay = "0"
     elif re.match(r"\+[0-9]+", str(delay)):
-        delay = "%sm" % delay[1:]
+        delay = f"{delay[1:]}m"
     else:
         delay = str(delay)
 
@@ -324,7 +331,7 @@ def apply_kexec(kexec, target):
         distro.install_packages('kexec-tools')
 
     if not os.path.isfile(target_grubcfg):
-        raise ValueError("%s does not exist in target" % grubcfg)
+        raise ValueError(f"{grubcfg} does not exist in target")
 
     with open(target_grubcfg, "r") as fp:
         default = 0
@@ -332,9 +339,9 @@ def apply_kexec(kexec, target):
 
         # get the default grub boot entry number and menu entry line numbers
         for line_num, line in enumerate(fp, 1):
-            if re.search(r"\bset default=\"[0-9]+\"\b", " %s " % line):
+            if re.search(r"\bset default=\"[0-9]+\"\b", f" {line} "):
                 default = int(re.sub(r"[^0-9]", '', line))
-            if re.search(r"\bmenuentry\b", " %s " % line):
+            if re.search(r"\bmenuentry\b", f" {line} "):
                 menu_lines.append(line_num)
 
         if not menu_lines:
@@ -344,11 +351,7 @@ def apply_kexec(kexec, target):
         # get the begin and end line numbers for default menuentry section,
         # using end of file if it's the last menuentry section
         begin = menu_lines[default]
-        if begin != menu_lines[-1]:
-            end = menu_lines[default + 1] - 1
-        else:
-            end = line_num
-
+        end = menu_lines[default + 1] - 1 if begin != menu_lines[-1] else line_num
         fp.seek(0)
         lines = fp.readlines()
         kernel = append = initrd = ""
@@ -360,13 +363,13 @@ def apply_kexec(kexec, target):
                 append = "--append=" + ' '.join(split_line[2:])
             if 'initrd' in lines[i].split():
                 split_line = shlex.split(lines[i])
-                initrd = "--initrd=" + os.path.join(target, split_line[1])
+                initrd = f"--initrd={os.path.join(target, split_line[1])}"
 
         if not kernel:
             LOG.error("grub config file does not have a kernel\n")
             return False
 
-        LOG.debug("kexec -l %s %s %s" % (kernel, append, initrd))
+        LOG.debug(f"kexec -l {kernel} {append} {initrd}")
         util.subp(args=['kexec', '-l', kernel, append, initrd])
         return True
 
@@ -378,8 +381,7 @@ def migrate_proxy_settings(cfg):
         raise ValueError("'proxy' in config is not a dictionary: %s" % proxy)
 
     if 'http_proxy' in cfg:
-        hp = cfg['http_proxy']
-        if hp:
+        if hp := cfg['http_proxy']:
             if proxy.get('http_proxy', hp) != hp:
                 LOG.warn("legacy http_proxy setting (%s) differs from "
                          "proxy/http_proxy (%s), using %s",
@@ -404,7 +406,7 @@ def cmd_install(args):
 
     LOG.info(INSTALL_START_MSG)
     LOG.debug('LANG=%s', os.environ.get('LANG'))
-    LOG.debug("merged config: %s" % cfg)
+    LOG.debug(f"merged config: {cfg}")
     if not len(cfg.get('sources', [])):
         raise util.BadUsage("no sources provided to install")
 
@@ -418,10 +420,9 @@ def cmd_install(args):
     error_tarfile = instcfg.get('error_tarfile')
     post_files = instcfg.get('post_files', [logfile])
 
-    # Generate curtin configuration dump and add to write_files unless
-    # installation config disables dump
-    yaml_dump_file = instcfg.get('save_install_config', SAVE_INSTALL_CONFIG)
-    if yaml_dump_file:
+    if yaml_dump_file := instcfg.get(
+        'save_install_config', SAVE_INSTALL_CONFIG
+    ):
         write_files = cfg.get('write_files', {})
         write_files['curtin_install_cfg'] = {
             'path': yaml_dump_file,
@@ -450,15 +451,16 @@ def cmd_install(args):
         env.update(workingd.env())
 
         for name in cfg.get('stages'):
-            desc = STAGE_DESCRIPTIONS.get(name, "stage %s" % name)
+            desc = STAGE_DESCRIPTIONS.get(name, f"stage {name}")
             reportstack = events.ReportEventStack(
-                "stage-%s" % name, description=desc,
-                parent=args.reportstack)
+                f"stage-{name}", description=desc, parent=args.reportstack
+            )
+
             env['CURTIN_REPORTSTACK'] = reportstack.fullname
 
             with reportstack:
-                commands_name = '%s_commands' % name
-                with util.LogTimer(LOG.debug, 'stage_%s' % name):
+                commands_name = f'{name}_commands'
+                with util.LogTimer(LOG.debug, f'stage_{name}'):
                     stage = Stage(name, cfg.get(commands_name, {}), env,
                                   reportstack=reportstack, logfile=logfile)
                     stage.run()

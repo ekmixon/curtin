@@ -22,7 +22,7 @@ def hook(args):
     if not args.target:
         raise ValueError("Target must be provided or set in environment")
 
-    LOG.debug("Finalizing %s" % args.target)
+    LOG.debug(f"Finalizing {args.target}")
     curtin.util.run_hook_if_exists(args.target, "finalize")
 
     sys.exit(0)

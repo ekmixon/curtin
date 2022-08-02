@@ -25,7 +25,7 @@ SUB_COMMAND_MODULES = [
 
 def add_subcmd(subparser, subcmd):
     modname = subcmd.replace("-", "_")
-    subcmd_full = "curtin.commands.%s" % modname
+    subcmd_full = f"curtin.commands.{modname}"
     __import__(subcmd_full)
     try:
         popfunc = getattr(sys.modules[subcmd_full], 'POPULATE_SUBCMD')
@@ -38,17 +38,17 @@ def add_subcmd(subparser, subcmd):
 class NoHelpParser(argparse.ArgumentParser):
     # ArgumentParser with forced 'add_help=False'
     def __init__(self, *args, **kwargs):
-        kwargs.update({'add_help': False})
+        kwargs['add_help'] = False
         super(NoHelpParser, self).__init__(*args, **kwargs)
 
     def error(self, message):
         # without overriding this, argparse exits with bad usage
-        raise ValueError("failed parsing arguments: %s" % message)
+        raise ValueError(f"failed parsing arguments: {message}")
 
 
 def get_main_parser(stacktrace=False, verbosity=0,
                     parser_class=argparse.ArgumentParser):
-    parser = parser_class(prog='curtin', epilog='Version %s' % VERSIONSTR)
+    parser = parser_class(prog='curtin', epilog=f'Version {VERSIONSTR}')
     parser.add_argument('--showtrace', action='store_true', default=stacktrace)
     parser.add_argument('-v', '--verbose', action='count', default=verbosity,
                         dest='verbosity')
@@ -188,14 +188,20 @@ def main(argv=None):
     # set up the reportstack
     update_configuration(cfg.get('reporting', {}))
 
-    stack_prefix = (os.environ.get("CURTIN_REPORTSTACK", "") +
-                    "/cmd-%s" % args.subcmd)
+    stack_prefix = (
+        os.environ.get("CURTIN_REPORTSTACK", "") + f"/cmd-{args.subcmd}"
+    )
+
     if stack_prefix.startswith("/"):
         stack_prefix = stack_prefix[1:]
     os.environ["CURTIN_REPORTSTACK"] = stack_prefix
     args.reportstack = events.ReportEventStack(
-        name=stack_prefix, reporting_enabled=True, level="DEBUG",
-        description="curtin command %s" % args.subcmd)
+        name=stack_prefix,
+        reporting_enabled=True,
+        level="DEBUG",
+        description=f"curtin command {args.subcmd}",
+    )
+
 
     try:
         with args.reportstack:

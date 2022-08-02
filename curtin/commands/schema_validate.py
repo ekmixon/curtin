@@ -20,7 +20,7 @@ def schema_validate_storage(confpath):
     try:
         storage_config.load_and_validate(confpath)
     except Exception as e:
-        sys.stderr.write('  ' + str(e) + '\n')
+        sys.stderr.write(f'  {str(e)}' + '\n')
         return 1
 
     sys.stdout.write('  Valid storage config: %s\n' % confpath)

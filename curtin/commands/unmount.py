@@ -16,7 +16,7 @@ def unmount_main(args):
         raise ValueError(msg)
 
     if not os.path.exists(args.target):
-        msg = "Cannot unmount target path %s: it does not exist" % args.target
+        msg = f"Cannot unmount target path {args.target}: it does not exist"
         raise util.FileMissingError(msg)
 
     LOG.info("Unmounting devices from target path: %s", args.target)

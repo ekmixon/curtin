@@ -76,20 +76,20 @@ def write_exe_wrapper(entrypoint, path=None, interpreter=None,
 
     subs = {
         'ep_main': entrypoint,
-        'ep_mcheck': deps_check_entry if deps_check_entry else "",
+        'ep_mcheck': deps_check_entry or "",
         'python_exe_list': interpreter,
     }
+
 
     content = '\n'.join(
         (CALL_ENTRY_POINT_SH_HEADER % subs, CALL_ENTRY_POINT_SH_BODY))
 
-    if path is not None:
-        with open(path, "w") as fp:
-            fp.write(content)
-        if mode is not None:
-            os.chmod(path, mode)
-    else:
+    if path is None:
         return content
+    with open(path, "w") as fp:
+        fp.write(content)
+    if mode is not None:
+        os.chmod(path, mode)
 
 
 def pack(fdout=None, command=None, paths=None, copy_files=None,
@@ -181,7 +181,7 @@ def pack(fdout=None, command=None, paths=None, copy_files=None,
         args = [archcmd]
         if fdout is not None:
             archout = os.path.join(tmpd, 'output')
-            args.append("--output=%s" % archout)
+            args.append(f"--output={archout}")
 
         args.extend(["--bin-path=_pwd_/bin", "--python-path=_pwd_", exdir,
                      "curtin", "--"])
@@ -220,18 +220,14 @@ def pack_install(fdout=None, configs=None, paths=None,
     if args is None:
         args = []
 
-    if install_deps:
-        dep_flags = ["--install-deps"]
-    else:
-        dep_flags = []
-
+    dep_flags = ["--install-deps"] if install_deps else []
     command = ["curtin"] + dep_flags + ["install"]
 
     my_files = []
     for n, config in enumerate(configs):
         apath = "configs/config-%03d.cfg" % n
         my_files.append((apath, config),)
-        command.append("--config=%s" % apath)
+        command.append(f"--config={apath}")
 
     command += args
 

@@ -43,9 +43,9 @@ def get_lvols_in_volgroup(vg_name):
 
 def get_lv_size_bytes(lv_name):
     """ get the size in bytes of a logical volume specified by lv_name."""
-    result = _filter_lvm_info('lvdisplay', 'lv_name', 'lv_size', lv_name,
-                              args=['--units=B'])
-    if result:
+    if result := _filter_lvm_info(
+        'lvdisplay', 'lv_name', 'lv_size', lv_name, args=['--units=B']
+    ):
         return util.human2bytes(result[0])
 
 

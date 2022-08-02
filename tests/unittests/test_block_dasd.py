@@ -66,7 +66,7 @@ class TestDasdValidDeviceId(CiTestCase):
                 'ff.ff.10001', '0.0.15ac.f']
 
     def random_nonhex(self, length=4):
-        return ''.join([random.choice(self.nonhex) for x in range(0, length)])
+        return ''.join([random.choice(self.nonhex) for _ in range(length)])
 
     def test_valid_none_raises(self):
         """raises ValueError on none-ish values for device_id."""
@@ -78,8 +78,8 @@ class TestDasdValidDeviceId(CiTestCase):
         """device_id must have exactly two '.' chars"""
 
         nodots = self.random_string()
-        onedot = "%s.%s" % (nodots, self.random_string())
-        threedots = "%s.%s." % (onedot, self.random_string())
+        onedot = f"{nodots}.{self.random_string()}"
+        threedots = f"{onedot}.{self.random_string()}."
 
         for invalid in [nodots, onedot, threedots]:
             self.assertNotEqual(2, invalid.count('.'))
@@ -121,7 +121,7 @@ class TestDasdValidDeviceId(CiTestCase):
     def test_valid_handles_non_hex_values(self):
         """device_id raises ValueError with non hex values in fields"""
         # build a device_id with 3 nonhex random values
-        invalid_dev = ".".join([self.random_nonhex() for x in range(0, 3)])
+        invalid_dev = ".".join([self.random_nonhex() for _ in range(3)])
         with self.assertRaises(ValueError):
             dasd.DasdDevice(invalid_dev)
 
@@ -143,8 +143,7 @@ class TestDasdCcwDeviceAttr(CiTestCase):
         if not my_attr:
             my_attr = self.random_string()
         self.m_loadfile.return_value = attr_val_in
-        attr_path = '/sys/bus/ccw/devices/%s/%s' % (self.dasd.device_id,
-                                                    my_attr)
+        attr_path = f'/sys/bus/ccw/devices/{self.dasd.device_id}/{my_attr}'
         result = self.dasd.ccw_device_attr(my_attr)
         self.assertEqual(attr_val, result)
         self.m_isfile.assert_called_with(attr_path)
@@ -159,7 +158,7 @@ class TestDasdCcwDeviceAttr(CiTestCase):
 
     def test_ccw_device_attr_strips_attr_value(self):
         """ccw_device_attr returns stripped attr value."""
-        attr_val = '%s' % self.random_string()
+        attr_val = f'{self.random_string()}'
         attr_val_in = attr_val + '\n'
         self._test_ccw_attr(attr_val_in=attr_val_in, attr_val=attr_val)
 
@@ -194,7 +193,7 @@ class TestDiskLayout(CiTestCase):
         super(TestDiskLayout, self).setUp()
         self.add_patch('curtin.block.dasd.dasd_format', 'm_dasd_format')
         dpath = 'curtin.block.dasd.DasdDevice'
-        self.add_patch(dpath + '.devname', 'm_devname')
+        self.add_patch(f'{dpath}.devname', 'm_devname')
 
         self.dasd = dasd.DasdDevice(random_device_id())
         self.devname = self.random_string()
@@ -246,10 +245,10 @@ class TestNeedsFormatting(CiTestCase):
     def setUp(self):
         super(TestNeedsFormatting, self).setUp()
         dpath = 'curtin.block.dasd.DasdDevice'
-        self.add_patch(dpath + '.is_not_formatted', 'm_not_fmt')
-        self.add_patch(dpath + '.blocksize', 'm_blocksize')
-        self.add_patch(dpath + '.disk_layout', 'm_disk_layout')
-        self.add_patch(dpath + '.label', 'm_label')
+        self.add_patch(f'{dpath}.is_not_formatted', 'm_not_fmt')
+        self.add_patch(f'{dpath}.blocksize', 'm_blocksize')
+        self.add_patch(f'{dpath}.disk_layout', 'm_disk_layout')
+        self.add_patch(f'{dpath}.label', 'm_label')
 
         self.m_not_fmt.return_value = False
         self.blocksize = 4096
@@ -301,7 +300,7 @@ class TestFormat(CiTestCase):
         self.add_patch('curtin.block.dasd.os.path.exists', 'm_exists')
         self.add_patch('curtin.block.dasd.util.subp', 'm_subp')
         dpath = 'curtin.block.dasd.DasdDevice'
-        self.add_patch(dpath + '.devname', 'm_devname')
+        self.add_patch(f'{dpath}.devname', 'm_devname')
 
         # defaults
         self.m_exists.return_value = True
@@ -324,9 +323,17 @@ class TestFormat(CiTestCase):
         self.dasd.format(blksize=blksize, layout=layout,
                          set_label=set_label, mode=mode)
         self.m_subp.assert_called_with(
-            ['dasdfmt', '-y', '--blocksize=%s' % blksize,
-             '--disk_layout=%s' % layout, '--mode=%s' % mode,
-             '--label=%s' % set_label, self.dasd.devname], capture=True)
+            [
+                'dasdfmt',
+                '-y',
+                f'--blocksize={blksize}',
+                f'--disk_layout={layout}',
+                f'--mode={mode}',
+                f'--label={set_label}',
+                self.dasd.devname,
+            ],
+            capture=True,
+        )
 
     def test_format_no_label_ignores_set_label_keep_label(self):
         blksize = 512
@@ -336,9 +343,17 @@ class TestFormat(CiTestCase):
         self.dasd.format(blksize=blksize, layout=layout,
                          set_label=set_label, no_label=True, mode=mode)
         self.m_subp.assert_called_with(
-            ['dasdfmt', '-y', '--blocksize=%s' % blksize,
-             '--disk_layout=%s' % layout, '--mode=%s' % mode,
-             '--no_label', self.dasd.devname], capture=True)
+            [
+                'dasdfmt',
+                '-y',
+                f'--blocksize={blksize}',
+                f'--disk_layout={layout}',
+                f'--mode={mode}',
+                '--no_label',
+                self.dasd.devname,
+            ],
+            capture=True,
+        )
 
     def test_format_keep_label_ignores_set_label(self):
         blksize = 512
@@ -348,13 +363,21 @@ class TestFormat(CiTestCase):
         self.dasd.format(blksize=blksize, layout=layout,
                          set_label=set_label, keep_label=True, mode=mode)
         self.m_subp.assert_called_with(
-            ['dasdfmt', '-y', '--blocksize=%s' % blksize,
-             '--disk_layout=%s' % layout, '--mode=%s' % mode,
-             '--keep_label', self.dasd.devname], capture=True)
+            [
+                'dasdfmt',
+                '-y',
+                f'--blocksize={blksize}',
+                f'--disk_layout={layout}',
+                f'--mode={mode}',
+                '--keep_label',
+                self.dasd.devname,
+            ],
+            capture=True,
+        )
 
     def test_format_raise_valueerror_on_bad_blksize(self):
         rval = random.randint(1, 5000)
-        blksize = (rval + 1) if rval in [512, 1024, 2048, 4096] else rval
+        blksize = rval + 1 if rval in {512, 1024, 2048, 4096} else rval
         self.assertNotIn(blksize, [512, 1024, 2048, 4096])
         with self.assertRaises(ValueError):
             self.dasd.format(blksize=blksize)

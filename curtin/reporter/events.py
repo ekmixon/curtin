@@ -23,7 +23,7 @@ class _nameset(set):
     def __getattr__(self, name):
         if name in self:
             return name
-        raise AttributeError("%s not a valid value" % name)
+        raise AttributeError(f"{name} not a valid value")
 
 
 status = _nameset(("SUCCESS", "WARN", "FAIL"))
@@ -69,7 +69,7 @@ class FinishReportingEvent(ReportingEvent):
             post_files = []
         self.post_files = post_files
         if result not in status:
-            raise ValueError("Invalid result: %s" % result)
+            raise ValueError(f"Invalid result: {result}")
         if self.result == status.WARN:
             self.level = "WARN"
         elif self.result == status.FAIL:
@@ -179,21 +179,14 @@ class ReportEventStack(object):
 
         # use parents reporting value if not provided
         if reporting_enabled is None:
-            if parent:
-                reporting_enabled = parent.reporting_enabled
-            else:
-                reporting_enabled = True
+            reporting_enabled = parent.reporting_enabled if parent else True
         self.reporting_enabled = reporting_enabled
 
-        if parent:
-            self.fullname = '/'.join((parent.fullname, name,))
-        else:
-            self.fullname = self.name
+        self.fullname = '/'.join((parent.fullname, name,)) if parent else self.name
         self.children = {}
 
     def __repr__(self):
-        return ("ReportEventStack(%s, %s, reporting_enabled=%s)" %
-                (self.name, self.description, self.reporting_enabled))
+        return f"ReportEventStack({self.name}, {self.description}, reporting_enabled={self.reporting_enabled})"
 
     def __enter__(self):
         self.result = status.SUCCESS
@@ -223,9 +216,7 @@ class ReportEventStack(object):
 
     @property
     def message(self):
-        if self._message is not None:
-            return self._message
-        return self.description
+        return self._message if self._message is not None else self.description
 
     @message.setter
     def message(self, value):

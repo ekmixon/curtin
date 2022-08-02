@@ -12,7 +12,7 @@ def target_path(target, path=None):
     if target in (None, ""):
         target = "/"
     elif not isinstance(target, string_types):
-        raise ValueError("Unexpected input for target: %s" % target)
+        raise ValueError(f"Unexpected input for target: {target}")
     else:
         target = os.path.abspath(target)
         # abspath("//") returns "//" specifically for 2 slashes.
@@ -23,7 +23,7 @@ def target_path(target, path=None):
         return target
 
     if not isinstance(path, string_types):
-        raise ValueError("Unexpected input for path: %s" % path)
+        raise ValueError(f"Unexpected input for path: {path}")
 
     # os.path.join("/etc", "/foo") returns "/foo". Chomp all leading /.
     while len(path) and path[0] == "/":

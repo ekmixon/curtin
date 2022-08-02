@@ -15,8 +15,8 @@ class TestBlockMkfs(CiTestCase):
                 "uuid": self.test_uuid}
 
     def _assert_same_flags(self, call, expected):
-        print("call:\n{}".format(call))
-        print("expected:\n{}".format(expected))
+        print(f"call:\n{call}")
+        print(f"expected:\n{expected}")
 
         for flag in expected:
             if type(flag) == list:
@@ -81,8 +81,7 @@ class TestBlockMkfs(CiTestCase):
     def test_mkfs_xfs(self):
         """ mkfs.xfs passes uuid parameter """
         conf = self._get_config("xfs")
-        expected_flags = ['-f', ['-L', 'format1'],
-                          ['-m', 'uuid=%s' % self.test_uuid]]
+        expected_flags = ['-f', ['-L', 'format1'], ['-m', f'uuid={self.test_uuid}']]
         self._run_mkfs_with_config(conf, "mkfs.xfs", expected_flags)
 
     def test_mkfs_btrfs_on_precise(self):

@@ -572,7 +572,7 @@ class TestBlockIscsiDiskFromConfig(CiTestCase):
     def test_parse_iscsi_disk_from_config(self):
         """Test parsing iscsi volume path creates the same iscsi disk"""
         target = 'curtin-659d5f45-4f23-46cb-b826-f2937b896e09'
-        iscsi_path = 'iscsi:10.245.168.20::20112:1:' + target
+        iscsi_path = f'iscsi:10.245.168.20::20112:1:{target}'
         cfg = {
             'storage': {
                 'config': [{'type': 'disk',
@@ -663,8 +663,13 @@ class TestBlockIscsiDisconnect(CiTestCase):
         util.ensure_dir(self.iscsi_nodes)
 
     def _fmt_disconnect(self, target, portal):
-        return ['iscsiadm', '--mode=node', '--targetname=%s' % target,
-                '--portal=%s' % portal, '--logout']
+        return [
+            'iscsiadm',
+            '--mode=node',
+            f'--targetname={target}',
+            f'--portal={portal}',
+            '--logout',
+        ]
 
     def _setup_nodes(self, sessions, connection):
         # setup iscsi_nodes dir (<fakeroot>/etc/iscsi/nodes) with content
@@ -693,7 +698,7 @@ class TestBlockIscsiDisconnect(CiTestCase):
         expected_calls = []
         for session in sessions:
             (host, port, _) = connection.split(',')
-            disconnect = self._fmt_disconnect(session, "%s:%s" % (host, port))
+            disconnect = self._fmt_disconnect(session, f"{host}:{port}")
             calls = [
                 mock.call(['sync']),
                 mock.call(disconnect, capture=True, log_captured=True),
@@ -737,7 +742,7 @@ class TestBlockIscsiDisconnect(CiTestCase):
         expected_calls = []
         for session in sessions:
             (host, port, _) = connection.split(',')
-            disconnect = self._fmt_disconnect(session, "%s:%s" % (host, port))
+            disconnect = self._fmt_disconnect(session, f"{host}:{port}")
             calls = [
                 mock.call(['sync']),
                 mock.call(disconnect, capture=True, log_captured=True),

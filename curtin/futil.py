@@ -20,12 +20,7 @@ def decode_perms(perm, default=0o644):
     try:
         if perm is None:
             return default
-        if isinstance(perm, (int, float)):
-            # Just 'downcast' it (if a float)
-            return int(perm)
-        else:
-            # Force to string and try octal conversion
-            return int(str(perm), 8)
+        return int(perm) if isinstance(perm, (int, float)) else int(str(perm), 8)
     except (TypeError, ValueError):
         return default
 
@@ -39,7 +34,7 @@ def chownbyname(fname, user=None, group=None):
         if group:
             gid = grp.getgrnam(group).gr_gid
     except KeyError as e:
-        raise OSError("Unknown user or group: %s" % (e))
+        raise OSError(f"Unknown user or group: {e}")
     chownbyid(fname, uid, gid)
 
 
@@ -48,10 +43,7 @@ def extract_usergroup(ug_pair):
         return (None, None)
     ug_parted = ug_pair.split(':', 1)
     u = ug_parted[0].strip()
-    if len(ug_parted) == 2:
-        g = ug_parted[1].strip()
-    else:
-        g = None
+    g = ug_parted[1].strip() if len(ug_parted) == 2 else None
     if not u or u == "-1" or u.lower() == "none":
         u = None
     if not g or g == "-1" or g.lower() == "none":
@@ -61,9 +53,7 @@ def extract_usergroup(ug_pair):
 
 def write_finfo(path, content, owner="-1:-1", perms="0644"):
     (u, g) = extract_usergroup(owner)
-    omode = "w"
-    if isinstance(content, bytes):
-        omode = "wb"
+    omode = "wb" if isinstance(content, bytes) else "w"
     write_file(path, content, mode=decode_perms(perms), omode=omode)
     chownbyname(path, u, g)
 

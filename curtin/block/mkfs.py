@@ -169,8 +169,7 @@ def mkfs(path, fstype, strict=False, label=None, uuid=None, force=False,
     # use device logical block size to ensure properly formated filesystems
     (logical_bsize, physical_bsize) = block.get_blockdev_sector_size(path)
     if logical_bsize > 512:
-        lbs_str = ('size={}'.format(logical_bsize) if fs_family == "xfs"
-                   else str(logical_bsize))
+        lbs_str = f'size={logical_bsize}' if fs_family == "xfs" else str(logical_bsize)
         cmd.extend(get_flag_mapping("sectorsize", fs_family,
                                     param=lbs_str, strict=strict))
 

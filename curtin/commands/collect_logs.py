@@ -84,8 +84,7 @@ def create_log_tarfile(tarfile, config):
     maascfg = instcfg.get('maas', {})
     redact_values = []
     for key in ('consumer_key', 'token_key', 'token_secret'):
-        redact_value = maascfg.get(key)
-        if redact_value:
+        if redact_value := maascfg.get(key):
             redact_values.append(redact_value)
 
     date = datetime.utcnow().strftime('%Y-%m-%d-%H-%M')

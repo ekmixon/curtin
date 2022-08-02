@@ -24,7 +24,7 @@ def get_dev_name_entry(devname):
     convert device name to path in /dev
     """
     bname = devname.split('/dev/')[-1]
-    return (bname, "/dev/" + bname)
+    return bname, f"/dev/{bname}"
 
 
 def is_valid_device(devname):
@@ -52,9 +52,7 @@ def dev_short(devname):
     get short form of device name
     """
     devname = os.path.normpath(devname)
-    if os.path.sep in devname:
-        return os.path.basename(devname)
-    return devname
+    return os.path.basename(devname) if os.path.sep in devname else devname
 
 
 def dev_path(devname):
@@ -65,7 +63,7 @@ def dev_path(devname):
         # it could be something like /dev/mapper/mpatha-part2
         return os.path.realpath(devname)
     else:
-        return '/dev/' + devname
+        return f'/dev/{devname}'
 
 
 def md_path(mdname):
@@ -76,9 +74,9 @@ def md_path(mdname):
     elif re.match(r'/dev/md\d+$', full_mdname):
         return full_mdname
     elif '/' in mdname:
-        raise ValueError("Invalid RAID device name: {}".format(mdname))
+        raise ValueError(f"Invalid RAID device name: {mdname}")
     else:
-        return '/dev/md/{}'.format(mdname)
+        return f'/dev/md/{mdname}'
 
 
 def path_to_kname(path):
@@ -96,7 +94,7 @@ def path_to_kname(path):
     dev_kname = os.path.basename(path)
     # cciss devices need to have 'cciss!' prepended
     if path.startswith('/dev/cciss'):
-        dev_kname = 'cciss!' + dev_kname
+        dev_kname = f'cciss!{dev_kname}'
     return dev_kname
 
 
@@ -114,7 +112,7 @@ def kname_to_path(kname):
     path = os.path.realpath(os.sep.join(['/dev'] + kname.split('!')))
     # make sure path we get is correct
     if not (os.path.exists(path) and is_valid_device(path)):
-        raise OSError('could not get path to dev from kname: {}'.format(kname))
+        raise OSError(f'could not get path to dev from kname: {kname}')
     return path
 
 
@@ -126,18 +124,16 @@ def partition_kname(disk_kname, partition_number):
         # device-mapper devices may create a new dm device for the partition,
         # e.g. multipath disk is at dm-2, new partition could be dm-11, but
         # linux will create a -partX symlink against the disk by-id name.
-        devpath = '/dev/' + disk_kname
+        devpath = f'/dev/{disk_kname}'
         disk_link = get_device_mapper_links(devpath, first=True)
-        return path_to_kname(
-                    os.path.realpath('%s-part%s' % (disk_link,
-                                                    partition_number)))
+        return path_to_kname(os.path.realpath(f'{disk_link}-part{partition_number}'))
 
     for dev_type in ['bcache', 'nvme', 'mmcblk', 'cciss', 'mpath', 'md',
                      'loop']:
         if disk_kname.startswith(dev_type):
-            partition_number = "p%s" % partition_number
+            partition_number = f"p{partition_number}"
             break
-    return "%s%s" % (disk_kname, partition_number)
+    return f"{disk_kname}{partition_number}"
 
 
 def sysfs_to_devpath(sysfs_path):
@@ -146,8 +142,7 @@ def sysfs_to_devpath(sysfs_path):
     """
     path = kname_to_path(path_to_kname(sysfs_path))
     if not is_block_device(path):
-        raise ValueError('could not find blockdev for sys path: {}'
-                         .format(sysfs_path))
+        raise ValueError(f'could not find blockdev for sys path: {sysfs_path}')
     return path
 
 
@@ -155,22 +150,18 @@ def sys_block_path(devname, add=None, strict=True):
     """
     get path to device in /sys/class/block
     """
-    toks = ['/sys/class/block']
     # insert parent dev if devname is partition
     devname = os.path.normpath(devname)
     if devname.startswith('/dev/') and not os.path.exists(devname):
         LOG.warning('block.sys_block_path: devname %s does not exist', devname)
 
-    toks.append(path_to_kname(devname))
-
+    toks = ['/sys/class/block', path_to_kname(devname)]
     if add is not None:
         toks.append(add)
     path = os.sep.join(toks)
 
     if strict and not os.path.exists(path):
-        err = OSError(
-            "devname '{}' did not have existing syspath '{}'".format(
-                devname, path))
+        err = OSError(f"devname '{devname}' did not have existing syspath '{path}'")
         err.errno = errno.ENOENT
         raise err
 
@@ -196,25 +187,22 @@ def get_device_slave_knames(device):
 
     Returns a list of knames
     """
-    slave_knames = []
     slaves_dir_path = os.path.join(sys_block_path(device), 'slaves')
 
-    # if we find a 'slaves' dir, recurse and check
-    # the underlying devices
-    if os.path.exists(slaves_dir_path):
-        slaves = os.listdir(slaves_dir_path)
-        if len(slaves) > 0:
-            for slave_kname in slaves:
-                slave_knames.extend(get_device_slave_knames(slave_kname))
-        else:
-            slave_knames.append(path_to_kname(device))
-
-        return slave_knames
-    else:
+    if not os.path.exists(slaves_dir_path):
         # if a device has no 'slaves' attribute then
         # we've found the underlying device, return
         # the kname of the device
         return [path_to_kname(device)]
+    slaves = os.listdir(slaves_dir_path)
+    slave_knames = []
+    if len(slaves) > 0:
+        for slave_kname in slaves:
+            slave_knames.extend(get_device_slave_knames(slave_kname))
+    else:
+        slave_knames.append(path_to_kname(device))
+
+    return slave_knames
 
 
 def _lsblock_pairs_to_dict(lines):
@@ -227,10 +215,7 @@ def _lsblock_pairs_to_dict(lines):
         cur = {}
         for tok in toks:
             k, v = tok.split("=", 1)
-            if k == 'MAJ_MIN':
-                k = 'MAJ:MIN'
-            else:
-                k = k.replace('_', '-')
+            k = 'MAJ:MIN' if k == 'MAJ_MIN' else k.replace('_', '-')
             cur[k] = v
         # use KNAME, as NAME may include spaces and other info,
         # for example, lvm decices may show 'dm0 lvm1'
@@ -301,10 +286,7 @@ def sfdisk_info(devpath):
     except util.ProcessExecutionError as e:
         out = None
         LOG.exception(e)
-    if out is not None:
-        return util.load_json(out).get('partitiontable', {})
-
-    return {}
+    return util.load_json(out).get('partitiontable', {}) if out is not None else {}
 
 
 def get_partition_sfdisk_info(devpath, sfdisk_info=None):
@@ -340,8 +322,7 @@ def dmsetup_info(devname):
         return {}
 
     values = out.strip().split(_SEP)
-    info = dict(zip(fields, values))
-    return info
+    return dict(zip(fields, values))
 
 
 def get_unused_blockdev_info():
@@ -358,7 +339,7 @@ def get_unused_blockdev_info():
     for devname, data in bdinfo.items():
         cur = _lsblock([data['device_path']])
         mountpoints = [x for x in cur if cur[x].get('MOUNTPOINT')]
-        if len(mountpoints) == 0:
+        if not mountpoints:
             unused[devname] = data
     return unused
 
@@ -368,12 +349,11 @@ def get_devices_for_mp(mountpoint):
     return a list of devices (full paths) used by the provided mountpoint
     """
     bdinfo = _lsblock()
-    found = set()
-    for devname, data in bdinfo.items():
-        if data['MOUNTPOINT'] == mountpoint:
-            found.add(data['device_path'])
-
-    if found:
+    if found := {
+        data['device_path']
+        for devname, data in bdinfo.items()
+        if data['MOUNTPOINT'] == mountpoint
+    }:
         return list(found)
 
     # for some reason, on some systems, lsblk does not list mountpoint
@@ -422,14 +402,14 @@ def get_blockdev_for_partition(devpath, strict=True):
 
     # don't need to try out multiple sysfs paths as path_to_kname handles cciss
     if strict and not os.path.exists(syspath):
-        raise OSError("%s had no syspath (%s)" % (devpath, syspath))
+        raise OSError(f"{devpath} had no syspath ({syspath})")
 
     if rpath.startswith('/dev/dm-'):
         parent_info = multipath.mpath_partition_to_mpath_id_and_partnumber(
             rpath)
         if parent_info is not None:
             mpath_id, ptnum = parent_info
-            return os.path.realpath('/dev/mapper/' + mpath_id), ptnum
+            return os.path.realpath(f'/dev/mapper/{mpath_id}'), ptnum
 
     ptpath = os.path.join(syspath, "partition")
     if not os.path.exists(ptpath):
@@ -443,7 +423,7 @@ def get_blockdev_for_partition(devpath, strict=True):
     disksyspath = os.path.dirname(rsyspath)
 
     diskmajmin = util.load_file(os.path.join(disksyspath, "dev")).rstrip()
-    diskdevpath = os.path.realpath("/dev/block/%s" % diskmajmin)
+    diskdevpath = os.path.realpath(f"/dev/block/{diskmajmin}")
 
     # diskdevpath has something like 253:0
     # and udev has put links in /dev/block/253:0 to the device name in /dev/
@@ -469,11 +449,11 @@ def get_pardevs_on_blockdevs(devs):
         devs = []
     devs = [get_dev_name_entry(d)[1] for d in devs]
     found = _lsblock(devs)
-    ret = {}
-    for short in found:
-        if found[short]['device_path'] not in devs:
-            ret[short] = found[short]
-    return ret
+    return {
+        short: found[short]
+        for short in found
+        if found[short]['device_path'] not in devs
+    }
 
 
 def stop_all_unused_multipath_devices():
@@ -594,7 +574,7 @@ def _legacy_detect_multipath(target_mountpoint=None):
     # separate disk partitions for / and /boot. We need to do UUID-based
     # multipath detection against each of target devices.
     target_devs = get_devices_for_mp(target_mountpoint)
-    LOG.debug("target_devs: %s" % target_devs)
+    LOG.debug(f"target_devs: {target_devs}")
     for devpath, data in binfo.items():
         # We need to figure out UUID of the target device first
         if devpath not in target_devs:
@@ -607,7 +587,7 @@ def _legacy_detect_multipath(target_mountpoint=None):
             LOG.warn("Target partition %s doesn't have UUID assigned",
                      devpath)
             continue
-        LOG.debug("%s: %s" % (devpath, data.get('UUID', "")))
+        LOG.debug(f"""{devpath}: {data.get('UUID', "")}""")
         # Iterating over available devices to see if any other device
         # has the same UUID as the target device. If such device exists
         # we probably installed the system to the multipath device.
@@ -631,8 +611,7 @@ def _device_is_multipathed(devpath):
     if devpath.startswith('/dev/dm-'):
         # check members of composed devices (LVM, dm-crypt)
         if 'DM_LV_NAME' in info:
-            volgroup = info.get('DM_VG_NAME')
-            if volgroup:
+            if volgroup := info.get('DM_VG_NAME'):
                 if any((multipath.is_mpath_member(pv) for pv in
                         lvm.get_pvols_in_volgroup(volgroup))):
                     return True
@@ -642,8 +621,7 @@ def _device_is_multipathed(devpath):
                 md_get_devices_list(devpath) + md_get_spares_list(devpath))):
             return True
 
-    result = multipath.is_mpath_member(devpath)
-    return result
+    return multipath.is_mpath_member(devpath)
 
 
 def _md_get_members_list(devpath, state_check):
@@ -689,14 +667,13 @@ def get_scsi_wwid(device, replace_whitespace=False):
     """
     Issue a call to scsi_id utility to get WWID of the device.
     """
-    cmd = ['/lib/udev/scsi_id', '--whitelisted', '--device=%s' % device]
+    cmd = ['/lib/udev/scsi_id', '--whitelisted', f'--device={device}']
     if replace_whitespace:
         cmd.append('--replace-whitespace')
     try:
         (out, err) = util.subp(cmd, capture=True)
         LOG.debug("scsi_id output raw:\n%s\nerror:\n%s", out, err)
-        scsi_wwid = out.rstrip('\n')
-        return scsi_wwid
+        return out.rstrip('\n')
     except util.ProcessExecutionError as e:
         LOG.warn("Failed to get WWID: %s", e)
         return None
@@ -706,20 +683,16 @@ def get_multipath_wwids():
     """
     Get WWIDs of all multipath devices available in the system.
     """
-    multipath_devices = set()
     multipath_wwids = set()
     devuuids = [(d, i['UUID']) for d, i in blkid().items() if 'UUID' in i]
-    # Looking for two disks which contain filesystems with the same UUID.
-    for (dev1, uuid1), (dev2, uuid2) in itertools.combinations(devuuids, 2):
-        if uuid1 == uuid2:
-            multipath_devices.add(get_blockdev_for_partition(dev1)[0])
+    multipath_devices = {
+        get_blockdev_for_partition(dev1)[0]
+        for (dev1, uuid1), (dev2, uuid2) in itertools.combinations(devuuids, 2)
+        if uuid1 == uuid2
+    }
+
     for device in multipath_devices:
-        wwid = get_scsi_wwid(device)
-        # Function get_scsi_wwid() may return None in case of errors or
-        # WWID field may be empty for some buggy disk. We don't want to
-        # propagate both of these value further to avoid generation of
-        # incorrect /etc/multipath/bindings file.
-        if wwid:
+        if wwid := get_scsi_wwid(device):
             multipath_wwids.add(wwid)
     return multipath_wwids
 
@@ -746,8 +719,7 @@ def get_root_device(dev, paths=None):
                 fullpath = os.path.join(tmp_mount, path)
                 if os.path.isdir(fullpath):
                     target = dev_path
-                    LOG.debug("Found path '%s' on device '%s'",
-                              path, dev_path)
+                    LOG.debug("Found path '%s' on device '%s'", path, target)
                     break
         except Exception:
             pass
@@ -758,8 +730,9 @@ def get_root_device(dev, paths=None):
     os.rmdir(tmp_mount)
     if target is None:
         raise ValueError(
-            "Did not find any filesystem on %s that contained one of %s" %
-            (dev, paths))
+            f"Did not find any filesystem on {dev} that contained one of {paths}"
+        )
+
     return target
 
 
@@ -816,10 +789,10 @@ def get_volume_uuid(path):
     the device and remains consistant across reboots
     """
     (out, _err) = util.subp(["blkid", "-o", "export", path], capture=True)
-    for line in out.splitlines():
-        if "UUID" in line:
-            return line.split('=')[-1]
-    return ''
+    return next(
+        (line.split('=')[-1] for line in out.splitlines() if "UUID" in line),
+        '',
+    )
 
 
 def get_mountpoints():
@@ -829,9 +802,12 @@ def get_mountpoints():
     info = _lsblock()
     proc_mounts = [mp for (dev, mp, vfs, opts, freq, passno) in
                    get_proc_mounts()]
-    lsblock_mounts = list(i.get("MOUNTPOINT") for name, i in info.items() if
-                          i.get("MOUNTPOINT") is not None and
-                          i.get("MOUNTPOINT") != "")
+    lsblock_mounts = [
+        i.get("MOUNTPOINT")
+        for name, i in info.items()
+        if i.get("MOUNTPOINT") is not None and i.get("MOUNTPOINT") != ""
+    ]
+
 
     return list(set(proc_mounts + lsblock_mounts))
 
@@ -863,13 +839,16 @@ def _get_dev_disk_by_prefix(prefix):
      '/dev/sda1': '/dev/disk/<prefix>/virtio-aaaa-part1',
     }
     """
-    if not os.path.exists(prefix):
-        return {}
-    return {
-        os.path.realpath(bypfx): bypfx
-        for bypfx in [os.path.join(prefix, path)
-                      for path in os.listdir(prefix)]
-    }
+    return (
+        {
+            os.path.realpath(bypfx): bypfx
+            for bypfx in [
+                os.path.join(prefix, path) for path in os.listdir(prefix)
+            ]
+        }
+        if os.path.exists(prefix)
+        else {}
+    )
 
 
 def get_dev_disk_byid():
@@ -908,15 +887,13 @@ def get_device_mapper_links(devpath, first=False):
     """ Return the best devlink to device at devpath. """
     info = udevadm_info(devpath)
     if 'DEVLINKS' not in info:
-        raise ValueError('Device %s does not have device symlinks' % devpath)
-    devlinks = [devlink for devlink in sorted(info['DEVLINKS']) if devlink]
-    if not devlinks:
+        raise ValueError(f'Device {devpath} does not have device symlinks')
+    if devlinks := [
+        devlink for devlink in sorted(info['DEVLINKS']) if devlink
+    ]:
+        return devlinks[0] if first else devlinks
+    else:
         raise ValueError('Unexpected DEVLINKS list contained empty values')
-
-    if first:
-        return devlinks[0]
-
-    return devlinks
 
 
 def lookup_disk(serial):
@@ -931,7 +908,7 @@ def lookup_disk(serial):
 
     disks = list(filter(lambda x: serial_udev in x,
                         os.listdir("/dev/disk/by-id/")))
-    if not disks or len(disks) < 1:
+    if not disks:
         raise ValueError("no disk with serial '%s' found" % serial_udev)
 
     # Sort by length and take the shortest path name, as the longer path names
@@ -939,7 +916,7 @@ def lookup_disk(serial):
     # determine the path to the block device in /dev/
     disks.sort(key=lambda x: len(x))
     LOG.debug('lookup_disks found: %s', disks)
-    path = os.path.realpath("/dev/disk/by-id/%s" % disks[0])
+    path = os.path.realpath(f"/dev/disk/by-id/{disks[0]}")
     # /dev/dm-X
     if multipath.is_mpath_device(path):
         info = udevadm_info(path)
@@ -965,15 +942,15 @@ def lookup_dasd(bus_id):
     """
 
     LOG.info('Processing ccw bus_id %s', bus_id)
-    sys_ccw_dev = '/sys/bus/ccw/devices/%s/block' % bus_id
+    sys_ccw_dev = f'/sys/bus/ccw/devices/{bus_id}/block'
     if not os.path.exists(sys_ccw_dev):
-        raise ValueError('Failed to find a block device at %s' % sys_ccw_dev)
+        raise ValueError(f'Failed to find a block device at {sys_ccw_dev}')
 
     dasds = os.listdir(sys_ccw_dev)
     if not dasds or len(dasds) < 1:
         raise ValueError("no dasd with device_id '%s' found" % bus_id)
 
-    path = '/dev/%s' % dasds[0]
+    path = f'/dev/{dasds[0]}'
     if not os.path.exists(path):
         raise ValueError("path '%s' to block device for dasd with bus_id '%s' \
             does not exist" % (path, bus_id))
@@ -1095,10 +1072,7 @@ def is_zfs_member(device):
     """
     info = _lsblock()
     kname = path_to_kname(device)
-    if kname in info and info[kname].get('FSTYPE') == 'zfs_member':
-        return True
-
-    return False
+    return kname in info and info[kname].get('FSTYPE') == 'zfs_member'
 
 
 def is_online(device):
@@ -1117,7 +1091,7 @@ def zkey_supported(strict=True):
         util.load_kernel_module('pkey')
     except util.ProcessExecutionError as err:
         msg = "Failed to load 'pkey' kernel module"
-        LOG.error(msg + ": %s" % err) if strict else LOG.warning(msg)
+        LOG.error(msg + f": {err}") if strict else LOG.warning(msg)
         return False
 
     try:
@@ -1127,7 +1101,7 @@ def zkey_supported(strict=True):
             return True
     except util.ProcessExecutionError as err:
         msg = "zkey not supported"
-        LOG.error(msg + ": %s" % err) if strict else LOG.warning(msg)
+        LOG.error(msg + f": {err}") if strict else LOG.warning(msg)
 
     return False
 
@@ -1141,7 +1115,7 @@ def exclusive_open(path, exclusive=True):
     mode = 'rb+'
     fd = None
     if not os.path.exists(path):
-        raise ValueError("No such file at path: %s" % path)
+        raise ValueError(f"No such file at path: {path}")
 
     flags = os.O_RDWR
     if exclusive:
@@ -1200,7 +1174,7 @@ def wipe_file(path, reader=None, buflen=4 * 1024 * 1024, exclusive=True):
                     (len(pbuf), buflen, pos))
 
             if pos + buflen >= size:
-                fp.write(pbuf[0:size-pos])
+                fp.write(pbuf[:size-pos])
                 break
             else:
                 fp.write(pbuf)
@@ -1217,14 +1191,17 @@ def quick_zero(path, partitions=True, exclusive=True):
     zero_size = buflen * count
     offsets = [0, -zero_size]
     is_block = is_block_device(path)
-    if not (is_block or os.path.isfile(path)):
+    if not is_block and not os.path.isfile(path):
         raise ValueError("%s: not an existing file or block device", path)
 
     pt_names = []
     if partitions and is_block:
         ptdata = sysfs_partition_data(path)
-        for kname, ptnum, start, size in ptdata:
-            pt_names.append((dev_path(kname), kname, ptnum))
+        pt_names.extend(
+            (dev_path(kname), kname, ptnum)
+            for kname, ptnum, start, size in ptdata
+        )
+
         pt_names.reverse()
 
     for (pt, kname, ptnum) in pt_names:
@@ -1261,18 +1238,14 @@ def zero_file_at_offsets(path, offsets, buflen=1024, count=1024, strict=False,
         msg_vals['size'] = size
 
         for offset in offsets:
-            if offset < 0:
-                pos = size + offset
-            else:
-                pos = offset
+            pos = size + offset if offset < 0 else offset
             msg_vals['offset'] = offset
             msg_vals['pos'] = pos
             if pos > size or pos < 0:
                 if strict:
                     raise ValueError(m_badoff.format(**msg_vals))
-                else:
-                    LOG.debug(m_badoff.format(**msg_vals))
-                    continue
+                LOG.debug(m_badoff.format(**msg_vals))
+                continue
 
             msg_vals['wsize'] = size - pos
             if pos + tot > size:
@@ -1281,10 +1254,10 @@ def zero_file_at_offsets(path, offsets, buflen=1024, count=1024, strict=False,
                 else:
                     LOG.debug(m_short.format(**msg_vals))
             fp.seek(pos)
-            for i in range(count):
+            for _ in range(count):
                 pos = fp.tell()
                 if pos + buflen > size:
-                    fp.write(buf[0:size-pos])
+                    fp.write(buf[:size-pos])
                 else:
                     fp.write(buf)
 
@@ -1323,7 +1296,7 @@ def wipe_volume(path, mode="superblock", exclusive=True):
     elif mode == "superblock-recursive":
         quick_zero(path, partitions=True, exclusive=exclusive)
     else:
-        raise ValueError("wipe mode %s not supported" % mode)
+        raise ValueError(f"wipe mode {mode} not supported")
 
 
 def get_supported_filesystems():

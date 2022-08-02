@@ -45,10 +45,7 @@ except NameError:
 from . import paths
 from .log import LOG, log_call
 
-binary_type = bytes
-if sys.version_info[0] < 3:
-    binary_type = str
-
+binary_type = str if sys.version_info[0] < 3 else bytes
 _INSTALLED_HELPERS_PATH = 'usr/lib/curtin/helpers'
 _INSTALLED_MAIN = 'usr/bin/curtin'
 
@@ -79,7 +76,7 @@ def _subp(args, data=None, rcs=None, env=None, capture=False,
     try:
         unshare_args = _get_unshare_pid_args(unshare_pid, tpath)
     except RuntimeError as e:
-        raise RuntimeError("Unable to unshare pid (cmd=%s): %s" % (args, e))
+        raise RuntimeError(f"Unable to unshare pid (cmd={args}): {e}")
 
     args = unshare_args + chroot_args + sh_args + list(args)
 
@@ -119,9 +116,7 @@ def _subp(args, data=None, rcs=None, env=None, capture=False,
                 err = b''
         if decode:
             def ldecode(data, m='utf-8'):
-                if not isinstance(data, bytes):
-                    return data
-                return data.decode(m, errors=decode)
+                return data.decode(m, errors=decode) if isinstance(data, bytes) else data
 
             out = ldecode(out)
             err = ldecode(err)
@@ -178,23 +173,22 @@ def _get_unshare_pid_args(unshare_pid=None, target=None, euid=None):
 
     unshare_pid_in = unshare_pid
     if unshare_pid is None:
-        unshare_pid = False
-        if tpath != "/" and euid == 0:
-            if _has_unshare_pid():
-                unshare_pid = True
-
+        unshare_pid = bool(tpath != "/" and euid == 0 and _has_unshare_pid())
     if not unshare_pid:
         return []
 
     # either unshare was passed in as True, or None and turned to True.
     if euid != 0:
         raise RuntimeError(
-            "given unshare_pid=%s but euid (%s) != 0." %
-            (unshare_pid_in, euid))
+            f"given unshare_pid={unshare_pid_in} but euid ({euid}) != 0."
+        )
+
 
     if not _has_unshare_pid():
         raise RuntimeError(
-            "given unshare_pid=%s but no unshare command." % unshare_pid_in)
+            f"given unshare_pid={unshare_pid_in} but no unshare command."
+        )
+
 
     return ['unshare', '--fork', '--pid', '--']
 
@@ -250,13 +244,7 @@ def subp(*args, **kwargs):
             if not decode:
                 python2 string or python3 bytes
     """
-    retries = []
-    if "retries" in kwargs:
-        retries = kwargs.pop("retries")
-        if not retries:
-            # allow retries=None
-            retries = []
-
+    retries = kwargs.pop("retries") or [] if "retries" in kwargs else []
     if args:
         cmd = args[0]
     if 'args' in kwargs:
@@ -281,7 +269,7 @@ def wait_for_removal(path, retries=[1, 3, 5, 7]):
 
     # Retry with waits between checking for existence
     LOG.debug('waiting for %s to be removed', path)
-    for num, wait in enumerate(retries):
+    for wait in retries:
         if not os.path.exists(path):
             LOG.debug('%s has been removed', path)
             return
@@ -308,7 +296,7 @@ def load_command_environment(env=os.environ, strict=False):
     if strict:
         missing = [k for k in mapping.values() if k not in env]
         if len(missing):
-            raise KeyError("missing environment vars: %s" % missing)
+            raise KeyError(f"missing environment vars: {missing}")
 
     return {k: env.get(v) for k, v in mapping.items()}
 
@@ -319,7 +307,7 @@ def is_kmod_loaded(module):
     if not module:
         raise ValueError('is_kmod_loaded: invalid module: "%s"', module)
 
-    return os.path.isdir('/sys/module/%s' % module)
+    return os.path.isdir(f'/sys/module/{module}')
 
 
 def load_kernel_module(module, check_loaded=True):
@@ -330,10 +318,9 @@ def load_kernel_module(module, check_loaded=True):
     if not module:
         raise ValueError('load_kernel_module: invalid module: "%s"', module)
 
-    if check_loaded:
-        if is_kmod_loaded(module):
-            LOG.debug('Skipping kernel module load, %s already loaded', module)
-            return
+    if check_loaded and is_kmod_loaded(module):
+        LOG.debug('Skipping kernel module load, %s already loaded', module)
+        return
 
     LOG.debug('Loading kernel module %s via modprobe', module)
     subp(['modprobe', '--use-blacklist', module])
@@ -356,36 +343,12 @@ class ProcessExecutionError(IOError):
     def __init__(self, stdout=None, stderr=None,
                  exit_code=None, cmd=None,
                  description=None, reason=None):
-        if not cmd:
-            self.cmd = '-'
-        else:
-            self.cmd = cmd
-
-        if not description:
-            self.description = 'Unexpected error while running command.'
-        else:
-            self.description = description
-
-        if not isinstance(exit_code, int):
-            self.exit_code = '-'
-        else:
-            self.exit_code = exit_code
-
-        if not stderr:
-            self.stderr = "''"
-        else:
-            self.stderr = self._indent_text(stderr)
-
-        if not stdout:
-            self.stdout = "''"
-        else:
-            self.stdout = self._indent_text(stdout)
-
-        if reason:
-            self.reason = reason
-        else:
-            self.reason = '-'
-
+        self.cmd = cmd or '-'
+        self.description = description or 'Unexpected error while running command.'
+        self.exit_code = exit_code if isinstance(exit_code, int) else '-'
+        self.stderr = self._indent_text(stderr) if stderr else "''"
+        self.stdout = self._indent_text(stdout) if stdout else "''"
+        self.reason = reason or '-'
         message = self.MESSAGE_TMPL % {
             'description': self.description,
             'cmd': self.cmd,
@@ -422,10 +385,10 @@ def is_mounted(target, src=None, opts=None):
     with open("/proc/mounts", "r") as fp:
         mounts = fp.read()
 
-    for line in mounts.splitlines():
-        if line.split()[1] == os.path.abspath(target):
-            return True
-    return False
+    return any(
+        line.split()[1] == os.path.abspath(target)
+        for line in mounts.splitlines()
+    )
 
 
 def list_device_mounts(device):
@@ -434,11 +397,7 @@ def list_device_mounts(device):
     with open("/proc/mounts", "r") as fp:
         mounts = fp.read()
 
-    dev_mounts = []
-    for line in mounts.splitlines():
-        if line.split()[0] == device:
-            dev_mounts.append(line)
-    return dev_mounts
+    return [line for line in mounts.splitlines() if line.split()[0] == device]
 
 
 def fuser_mount(path):
@@ -452,7 +411,6 @@ def fuser_mount(path):
         path may also be a kernel devpath (e.g. /dev/sda)
 
     """
-    fuser_output = {}
     try:
         stdout, stderr = subp(['fuser', '--verbose', '--mount', path],
                               capture=True)
@@ -481,14 +439,10 @@ def fuser_mount(path):
         '1': ['root', '1', '.rce.', 'systemd'],
     }
     """
-    # Note that fuser only writes PIDS to stdout. Each PID value is
-    # 'kernel' or an integer and indicates a process which has an open
-    # file handle against the path specified path. All other output
-    # is sent to stderr.  This code below will merge the two as needed.
-    for (pid, status) in zip(pidlist, stderr.splitlines()[1:]):
-        fuser_output[pid] = status.split()
-
-    return fuser_output
+    return {
+        pid: status.split()
+        for pid, status in zip(pidlist, stderr.splitlines()[1:])
+    }
 
 
 @contextmanager
@@ -635,10 +589,7 @@ def load_file(path, read_len=None, offset=0, decode=True):
             fp.seek(offset)
         contents = fp.read(read_len) if read_len else fp.read()
 
-    if decode:
-        return decode_binary(contents)
-    else:
-        return contents
+    return decode_binary(contents) if decode else contents
 
 
 def decode_binary(blob, encoding='utf-8', errors='replace'):
@@ -650,8 +601,10 @@ def load_json(text, root_types=(dict,)):
     decoded = json.loads(text)
     if not isinstance(decoded, tuple(root_types)):
         expected_types = ", ".join([str(t) for t in root_types])
-        raise TypeError("(%s) root types expected, got %s instead"
-                        % (expected_types, type(decoded)))
+        raise TypeError(
+            f"({expected_types}) root types expected, got {type(decoded)} instead"
+        )
+
     return decoded
 
 
@@ -791,12 +744,8 @@ def is_exe(fpath):
 def which(program, search=None, target=None):
     target = paths.target_path(target)
 
-    if os.path.sep in program:
-        # if program had a '/' in it, then do not search PATH
-        # 'which' does consider cwd here. (cd / && which bin/ls) = bin/ls
-        # so effectively we set cwd to / (or target)
-        if is_exe(paths.target_path(target, program)):
-            return program
+    if os.path.sep in program and is_exe(paths.target_path(target, program)):
+        return program
 
     if search is None:
         candpaths = [p.strip('"') for p in
@@ -830,9 +779,7 @@ def _installed_file_path(path, check_file=None):
     else:
         check_path = inst_path
 
-    if os.path.isfile(check_path):
-        return os.path.abspath(inst_path)
-    return None
+    return os.path.abspath(inst_path) if os.path.isfile(check_path) else None
 
 
 def get_paths(curtin_exe=None, lib=None, helpers=None):
@@ -842,9 +789,10 @@ def get_paths(curtin_exe=None, lib=None, helpers=None):
     mydir = os.path.realpath(os.path.dirname(__file__))
     tld = os.path.realpath(mydir + os.path.sep + "..")
 
-    if curtin_exe is None:
-        if os.path.isfile(os.path.join(tld, "bin", "curtin")):
-            curtin_exe = os.path.join(tld, "bin", "curtin")
+    if curtin_exe is None and os.path.isfile(
+        os.path.join(tld, "bin", "curtin")
+    ):
+        curtin_exe = os.path.join(tld, "bin", "curtin")
 
     if (curtin_exe is None and
             (os.path.basename(sys.argv[0]).startswith("curtin") and
@@ -852,8 +800,7 @@ def get_paths(curtin_exe=None, lib=None, helpers=None):
         curtin_exe = os.path.realpath(sys.argv[0])
 
     if curtin_exe is None:
-        found = which('curtin')
-        if found:
+        if found := which('curtin'):
             curtin_exe = found
 
     if curtin_exe is None:
@@ -885,7 +832,7 @@ def set_unexecutable(fname, strict=False):
     """
     if not os.path.exists(fname):
         if strict:
-            raise ValueError('%s: file does not exist' % fname)
+            raise ValueError(f'{fname}: file does not exist')
         return None
     cur = stat.S_IMODE(os.lstat(fname).st_mode)
     target = cur & (~stat.S_IEXEC & ~stat.S_IXGRP & ~stat.S_IXOTH)
@@ -911,8 +858,7 @@ def parse_efibootmgr(content):
         split = line.split(':')
         if len(split) == 2:
             key = split[0].strip()
-            output_key = efikey_to_dict_key.get(key, None)
-            if output_key:
+            if output_key := efikey_to_dict_key.get(key, None):
                 output[output_key] = split[1].strip()
                 if output_key == 'order':
                     output[output_key] = output[output_key].split(',')
@@ -958,17 +904,16 @@ def get_efibootmgr(target=None):
     """
     with ChrootableTarget(target=target) as in_chroot:
         stdout, _ = in_chroot.subp(['efibootmgr', '-v'], capture=True)
-        output = parse_efibootmgr(stdout)
-        return output
+        return parse_efibootmgr(stdout)
 
 
 def run_hook_if_exists(target, hook):
     """
     Look for "hook" in "target" and run it
     """
-    target_hook = paths.target_path(target, '/curtin/' + hook)
+    target_hook = paths.target_path(target, f'/curtin/{hook}')
     if os.path.isfile(target_hook):
-        LOG.debug("running %s" % target_hook)
+        LOG.debug(f"running {target_hook}")
         subp([target_hook])
         return True
     return False
@@ -988,7 +933,7 @@ def sanitize_source(source):
                  'fsimage-layered']
     deftype = 'tgz'
     for i in supported:
-        prefix = i + ":"
+        prefix = f"{i}:"
         if source.startswith(prefix):
             return {'type': i, 'uri': source[len(prefix):]}
 
@@ -1076,7 +1021,7 @@ def human2bytes(size):
     for m in mpliers:
         if size.endswith(m):
             mplier = m
-            num = size[0:-len(m)]
+            num = size[:-len(m)]
 
     try:
         num = float(num)
@@ -1227,7 +1172,7 @@ def is_resolvable(name):
                                             socket.AI_CANONNAME)
                 badresults[iname] = []
                 for (_, _, _, cname, sockaddr) in result:
-                    badresults[iname].append("%s: %s" % (cname, sockaddr[0]))
+                    badresults[iname].append(f"{cname}: {sockaddr[0]}")
                     badips.add(sockaddr[0])
             except (socket.gaierror, socket.error):
                 pass
@@ -1282,9 +1227,7 @@ def shlex_split(str_in):
         except NameError:
             pass
 
-        return shlex.split(str_in)
-    else:
-        return shlex.split(str_in)
+    return shlex.split(str_in)
 
 
 def load_shell_content(content, add_empty=False, empty_val=None):

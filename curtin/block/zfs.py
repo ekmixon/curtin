@@ -52,15 +52,20 @@ def _join_flags(optflag, params):
     def _b2s(value):
         if not isinstance(value, bool):
             return value
-        if value:
-            return 'on'
-        return 'off'
+        return 'on' if value else 'off'
 
-    return [] if not params else (
-        [param for opt in zip([optflag] * len(params),
-                              ["%s=%s" % (k, _b2s(v))
-                               for (k, v) in params.items()])
-         for param in opt])
+    return (
+        [
+            param
+            for opt in zip(
+                [optflag] * len(params),
+                [f"{k}={_b2s(v)}" for (k, v) in params.items()],
+            )
+            for param in opt
+        ]
+        if params
+        else []
+    )
 
 
 def _join_pool_volume(poolname, volume):
@@ -70,7 +75,7 @@ def _join_pool_volume(poolname, volume):
     if not poolname or not volume:
         raise ValueError('Invalid pool (%s) or volume (%s)', poolname, volume)
 
-    return os.path.normpath("%s/%s" % (poolname, volume))
+    return os.path.normpath(f"{poolname}/{volume}")
 
 
 def zfs_supported():
@@ -89,11 +94,11 @@ def zfs_assert_supported():
     """
     arch = util.get_platform_arch()
     if arch in ZFS_UNSUPPORTED_ARCHES:
-        raise RuntimeError("zfs is not supported on architecture: %s" % arch)
+        raise RuntimeError(f"zfs is not supported on architecture: {arch}")
 
     release = distro.lsb_release()['codename']
     if release in ZFS_UNSUPPORTED_RELEASES:
-        raise RuntimeError("zfs is not supported on release: %s" % release)
+        raise RuntimeError(f"zfs is not supported on release: {release}")
 
     if 'zfs' not in get_supported_filesystems():
         try:
@@ -101,9 +106,8 @@ def zfs_assert_supported():
         except util.ProcessExecutionError as err:
             raise RuntimeError("Failed to load 'zfs' kernel module: %s" % err)
 
-    missing_progs = [p for p in ('zpool', 'zfs') if not util.which(p)]
-    if missing_progs:
-        raise RuntimeError("Missing zfs utils: %s" % ','.join(missing_progs))
+    if missing_progs := [p for p in ('zpool', 'zfs') if not util.which(p)]:
+        raise RuntimeError(f"Missing zfs utils: {','.join(missing_progs)}")
 
 
 def zpool_create(poolname, vdevs, mountpoint=None, altroot=None,
@@ -131,13 +135,12 @@ def zpool_create(poolname, vdevs, mountpoint=None, altroot=None,
     if not isinstance(poolname, util.string_types) or not poolname:
         raise ValueError("Invalid poolname: %s", poolname)
 
-    if isinstance(vdevs, util.string_types) or isinstance(vdevs, dict):
+    if isinstance(vdevs, (util.string_types, dict)):
         raise TypeError("Invalid vdevs: expected list-like iterable")
-    else:
-        try:
-            vdevs = list(vdevs)
-        except TypeError:
-            raise TypeError("vdevs must be iterable, not: %s" % str(vdevs))
+    try:
+        vdevs = list(vdevs)
+    except TypeError:
+        raise TypeError(f"vdevs must be iterable, not: {vdevs}")
 
     pool_cfg = ZPOOL_DEFAULT_PROPERTIES.copy()
     if pool_properties:

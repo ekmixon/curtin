@@ -228,4 +228,4 @@ class TestWorkingDir(CiTestCase):
                         return_value=work_d) as m_mkdtemp:
             wd = install.WorkingDir({})
         self.assertEqual(1, m_mkdtemp.call_count)
-        self.assertTrue(wd.target.startswith(work_d + "/"))
+        self.assertTrue(wd.target.startswith(f"{work_d}/"))

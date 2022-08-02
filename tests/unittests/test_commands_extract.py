@@ -31,7 +31,7 @@ class MountTracker:
 
     def mount(self, device, mountpoint, options=None, type=None):
         if not os.path.isdir(mountpoint):
-            raise AssertionError("%s is not a directory" % (mountpoint,))
+            raise AssertionError(f"{mountpoint} is not a directory")
         self.mounts.append(Mount(device, mountpoint, options, type))
 
     def unmount(self, mountpoint):
@@ -39,13 +39,12 @@ class MountTracker:
             if m.mountpoint == mountpoint and not m.unmounted:
                 m.unmounted = True
                 return
-        else:
-            raise Exception("%s not mounted" % (mountpoint,))
+        raise Exception(f"{mountpoint} not mounted")
 
     def check_unmounted(self):
         for mount in self.mounts:
             if not mount.unmounted:
-                raise AssertionError("Mount %s was not unmounted" % (mount,))
+                raise AssertionError(f"Mount {mount} was not unmounted")
 
 
 class ExtractTestCase(CiTestCase):
@@ -53,7 +52,7 @@ class ExtractTestCase(CiTestCase):
     def _fake_download(self, url, path, retries=0):
         self.downloads.append(os.path.abspath(path))
         with open(path, "w") as fp:
-            fp.write("fake content from " + url + "\n")
+            fp.write(f"fake content from {url}" + "\n")
 
     def setUp(self):
         super(ExtractTestCase, self).setUp()
@@ -98,7 +97,7 @@ class ExtractTestCase(CiTestCase):
         expected_lowers = []
         for fname in fnames:
             if fname not in fname_to_mountpoint:
-                self.fail("%s was not mounted" % (fname,))
+                self.fail(f"{fname} was not mounted")
             else:
                 expected_lowers.append(fname_to_mountpoint[fname])
         expected_lowers.reverse()
@@ -127,9 +126,7 @@ class ExtractTestCase(CiTestCase):
             url, path = call[0][:2]
             self.assertIn(url, urls)
             url_to_fname[url] = path
-        fnames = []
-        for url in urls:
-            fnames.append(url_to_fname[url])
+        fnames = [url_to_fname[url] for url in urls]
         self.assert_mounted_and_extracted(mount_tracker, fnames, target)
 
 
@@ -141,7 +138,7 @@ class TestExtractSourceCp(ExtractTestCase):
         path = self.random_string()
         target = self.random_string()
 
-        extract_source({'uri': 'cp://' + path}, target)
+        extract_source({'uri': f'cp://{path}'}, target)
 
         self.assertEqual(0, self.m_download.call_count)
         self.assertEqual(0, len(mount_tracker.mounts))
@@ -202,9 +199,7 @@ class TestExtractSourceFsImageUrl(ExtractTestCase):
         path = self.tmp_path_with_random_content()
         target = self.random_string()
 
-        extract_source(
-            {'type': 'fsimage', 'uri': 'file://' + path},
-            target)
+        extract_source({'type': 'fsimage', 'uri': f'file://{path}'}, target)
 
         self.assertEqual(0, self.m_download.call_count)
         self.assert_mounted_and_extracted(mount_tracker, [path], target)
@@ -218,8 +213,10 @@ class TestExtractSourceFsImageUrl(ExtractTestCase):
         try:
             os.chdir(os.path.dirname(path))
             extract_source(
-                {'type': 'fsimage', 'uri': 'file://' + os.path.basename(path)},
-                target)
+                {'type': 'fsimage', 'uri': f'file://{os.path.basename(path)}'},
+                target,
+            )
+
         finally:
             os.chdir(startdir)
 
@@ -230,7 +227,7 @@ class TestExtractSourceFsImageUrl(ExtractTestCase):
     def test_http_url(self):
         """extract_root_fsimage_url supports http:// urls."""
         mount_tracker = self.track_mounts()
-        uri = 'http://' + self.random_string()
+        uri = f'http://{self.random_string()}'
         target = self.random_string()
 
         extract_source({'type': 'fsimage', 'uri': uri}, target)
@@ -289,9 +286,7 @@ class TestExtractSourceLayeredFsImageUrl(ExtractTestCase):
         paths, longest = self.tmp_paths_with_random_content(['base.ext'])
         target = self.random_string()
 
-        extract_source(
-            {'type': 'fsimage-layered', 'uri': 'file://' + longest},
-            target)
+        extract_source({'type': 'fsimage-layered', 'uri': f'file://{longest}'}, target)
 
         self.assertEqual(0, self.m_download.call_count)
         self.assert_mounted_and_extracted(mount_tracker, paths, target)
@@ -307,9 +302,11 @@ class TestExtractSourceLayeredFsImageUrl(ExtractTestCase):
             extract_source(
                 {
                     'type': 'fsimage-layered',
-                    'uri': 'file://' + os.path.basename(longest),
+                    'uri': f'file://{os.path.basename(longest)}',
                 },
-                target)
+                target,
+            )
+
         finally:
             os.chdir(startdir)
 
@@ -412,6 +409,7 @@ class TestExtractSourceLayeredFsImageUrl(ExtractTestCase):
                     fp.write("")
                 return
             return self._fake_download(url, path, retries)
+
         self.m_download.side_effect = empty_download_minimal_standard
 
         self.assertRaises(
@@ -423,8 +421,10 @@ class TestExtractSourceLayeredFsImageUrl(ExtractTestCase):
         for i, image_url in enumerate(["minimal.squashfs",
                                        "minimal.standard.squashfs",
                                        "minimal.standard.debug.squashfs"]):
-            self.assertEqual("http://example.io/" + image_url,
-                             self.m_download.call_args_list[i][0][0])
+            self.assertEqual(
+                f"http://example.io/{image_url}",
+                self.m_download.call_args_list[i][0][0],
+            )
 
 
 class TestGetImageStack(CiTestCase):

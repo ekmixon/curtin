@@ -12,10 +12,7 @@ def is_f(p):
 
 def in_virtualenv():
     try:
-        if sys.real_prefix == sys.prefix:
-            return False
-        else:
-            return True
+        return sys.real_prefix != sys.prefix
     except AttributeError:
         return False
 
@@ -41,9 +38,10 @@ setup(
     ],
     scripts=glob('bin/*'),
     data_files=[
-        (USR + '/share/doc/curtin',
-         [f for f in glob('doc/*') if is_f(f)]),
-        (USR + '/lib/curtin/helpers',
-         [f for f in glob('helpers/*') if is_f(f)])
-    ]
+        (f'{USR}/share/doc/curtin', [f for f in glob('doc/*') if is_f(f)]),
+        (
+            f'{USR}/lib/curtin/helpers',
+            [f for f in glob('helpers/*') if is_f(f)],
+        ),
+    ],
 )

@@ -103,8 +103,7 @@ def _parse_redhat_release(release_file=None, target=None):
     redhat_regex = (
         r'(?P<name>.+) release (?P<version>[\d\.]+) '
         r'\((?P<codename>[^)]+)\)')
-    match = re.match(redhat_regex, redhat_release)
-    if match:
+    if match := re.match(redhat_regex, redhat_release):
         group = match.groupdict()
         group['name'] = group['name'].lower().partition(' linux')[0]
         if group['name'] == 'red hat enterprise':
@@ -127,7 +126,7 @@ def get_distroinfo(target=None):
             except ValueError:
                 pass
         else:
-            raise ValueError("Unknown distro: %s" % variant_os_release['ID'])
+            raise ValueError(f"Unknown distro: {variant_os_release['ID']}")
     family = DISTRO_TO_OSFAMILY.get(variant)
     return DistroInfo(variant, family)
 
@@ -222,19 +221,22 @@ def apt_update(target=None, env=None, force=False, comment=None,
     listfiles += glob.glob(
         target_path(target, "etc/apt/sources.list.d/*.list"))
 
-    if os.path.exists(marker) and not force:
-        if len(find_newer(marker, listfiles)) == 0:
-            return
+    if (
+        os.path.exists(marker)
+        and not force
+        and len(find_newer(marker, listfiles)) == 0
+    ):
+        return
 
     restore_perms = []
 
     abs_tmpdir = tempfile.mkdtemp(dir=target_path(target, "/tmp"))
     try:
-        abs_slist = abs_tmpdir + "/sources.list"
-        abs_slistd = abs_tmpdir + "/sources.list.d"
-        ch_tmpdir = "/tmp/" + os.path.basename(abs_tmpdir)
-        ch_slist = ch_tmpdir + "/sources.list"
-        ch_slistd = ch_tmpdir + "/sources.list.d"
+        abs_slist = f"{abs_tmpdir}/sources.list"
+        abs_slistd = f"{abs_tmpdir}/sources.list.d"
+        ch_tmpdir = f"/tmp/{os.path.basename(abs_tmpdir)}"
+        ch_slist = f"{ch_tmpdir}/sources.list"
+        ch_slistd = f"{ch_tmpdir}/sources.list.d"
 
         # this file gets executed on apt-get update sometimes. (LP: #1527710)
         motd_update = target_path(
@@ -256,11 +258,14 @@ def apt_update(target=None, env=None, force=False, comment=None,
                         sfp.write(line + "\n")
 
         update_cmd = [
-            'apt-get', '--quiet',
+            'apt-get',
+            '--quiet',
             '--option=Acquire::Languages=none',
-            '--option=Dir::Etc::sourcelist=%s' % ch_slist,
-            '--option=Dir::Etc::sourceparts=%s' % ch_slistd,
-            'update']
+            f'--option=Dir::Etc::sourcelist={ch_slist}',
+            f'--option=Dir::Etc::sourceparts={ch_slistd}',
+            'update',
+        ]
+
 
         # do not using 'run_apt_command' so we can use 'retries' to subp
         with ChrootableTarget(target, allow_daemons=True) as inchroot:
@@ -290,11 +295,7 @@ def run_apt_command(mode, args=None, opts=None, env=None, target=None,
         env = os.environ.copy()
         env['DEBIAN_FRONTEND'] = 'noninteractive'
 
-    if which('eatmydata', target=target):
-        emd = ['eatmydata']
-    else:
-        emd = []
-
+    emd = ['eatmydata'] if which('eatmydata', target=target) else []
     cmd = emd + ['apt-get'] + defopts + opts + [mode] + args
     if not execute:
         return env, cmd
@@ -320,10 +321,7 @@ def run_yum_command(mode, args=None, opts=None, env=None, target=None,
 
     # dnf is a drop in replacement for yum. On newer RH based systems yum
     # is just a sym link to dnf.
-    if which('dnf', target=target):
-        cmd = ['dnf']
-    else:
-        cmd = ['yum']
+    cmd = ['dnf'] if which('dnf', target=target) else ['yum']
     cmd += defopts + opts + [mode] + args
     if not execute:
         return env, cmd
@@ -353,10 +351,7 @@ def yum_install(mode, packages=None, opts=None, env=None, target=None,
 
     # dnf is a drop in replacement for yum. On newer RH based systems yum
     # is just a sym link to dnf.
-    if which('dnf', target=target):
-        cmd = ['dnf']
-    else:
-        cmd = ['yum']
+    cmd = ['dnf'] if which('dnf', target=target) else ['yum']
     # download first, then install/upgrade from cache
     cmd += defopts + opts + [mode]
     dl_opts = ['--downloadonly', '--setopt=keepcache=1']
@@ -416,13 +411,11 @@ def install_packages(pkglist, osfamily=None, opts=None, target=None, env=None,
         DISTROS.redhat: run_yum_command,
     }
 
-    install_cmd = installer_map.get(osfamily)
-    if not install_cmd:
-        raise ValueError('No packge install command for distro: %s' %
-                         osfamily)
-
-    return install_cmd('install', args=pkglist, opts=opts, target=target,
-                       env=env, allow_daemons=allow_daemons)
+    if install_cmd := installer_map.get(osfamily):
+        return install_cmd('install', args=pkglist, opts=opts, target=target,
+                           env=env, allow_daemons=allow_daemons)
+    else:
+        raise ValueError(f'No packge install command for distro: {osfamily}')
 
 
 def has_pkg_available(pkg, target=None, osfamily=None):
@@ -435,17 +428,10 @@ def has_pkg_available(pkg, target=None, osfamily=None):
 
     if osfamily == DISTROS.debian:
         out, _ = subp(['apt-cache', 'pkgnames'], capture=True, target=target)
-        for item in out.splitlines():
-            if pkg == item.strip():
-                return True
-        return False
-
+        return any(pkg == item.strip() for item in out.splitlines())
     if osfamily == DISTROS.redhat:
         out, _ = run_yum_command('list', opts=['--cacheonly'])
-        for item in out.splitlines():
-            if item.lower().startswith(pkg.lower()):
-                return True
-        return False
+        return any(item.lower().startswith(pkg.lower()) for item in out.splitlines())
 
 
 def get_installed_packages(target=None):
@@ -498,8 +484,7 @@ def parse_dpkg_version(raw, name=None, semx=None):
           'name' (present only if name is not None)
     """
     if not isinstance(raw, string_types):
-        raise TypeError(
-            "Invalid type %s for parse_dpkg_version" % raw.__class__)
+        raise TypeError(f"Invalid type {raw.__class__} for parse_dpkg_version")
 
     if semx is None:
         semx = (10000, 100, 1)
@@ -518,8 +503,7 @@ def parse_dpkg_version(raw, name=None, semx=None):
         # this is a native package, package version treated as upstream.
         upstream = raw[raw_offset:]
 
-    match = re.search(r'[^0-9.]', upstream)
-    if match:
+    if match := re.search(r'[^0-9.]', upstream):
         extra = upstream[match.start():]
         upstream_base = upstream[:match.start()]
     else:
@@ -606,6 +590,6 @@ def get_architecture(target=None, osfamily=None):
     if osfamily == DISTROS.redhat:
         return rpm_get_architecture(target=target)
 
-    raise ValueError("Unhandled osfamily=%s" % osfamily)
+    raise ValueError(f"Unhandled osfamily={osfamily}")
 
 # vi: ts=4 expandtab syntax=python

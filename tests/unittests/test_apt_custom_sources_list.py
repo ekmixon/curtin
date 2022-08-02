@@ -103,17 +103,26 @@ class TestAptSourceConfigSourceList(CiTestCase):
         arch = distro.get_architecture()
         # would fail inside the unittest context
         bpath = "curtin.commands.apt_config."
-        upath = bpath + "util."
-        dpath = bpath + 'distro.'
-        self.add_patch(dpath + "get_architecture", "mockga", return_value=arch)
-        self.add_patch(upath + "write_file", "mockwrite")
-        self.add_patch(bpath + "os.rename", "mockrename")
-        self.add_patch(upath + "load_file", "mockload_file",
-                       return_value=MOCKED_APT_SRC_LIST)
-        self.add_patch(bpath + "distro.lsb_release", "mock_lsb_release",
-                       return_value={'codename': 'fakerel'})
-        self.add_patch(bpath + "apply_preserve_sources_list",
-                       "mock_apply_preserve_sources_list")
+        upath = f"{bpath}util."
+        dpath = f'{bpath}distro.'
+        self.add_patch(f"{dpath}get_architecture", "mockga", return_value=arch)
+        self.add_patch(f"{upath}write_file", "mockwrite")
+        self.add_patch(f"{bpath}os.rename", "mockrename")
+        self.add_patch(
+            f"{upath}load_file", "mockload_file", return_value=MOCKED_APT_SRC_LIST
+        )
+
+        self.add_patch(
+            f"{bpath}distro.lsb_release",
+            "mock_lsb_release",
+            return_value={'codename': 'fakerel'},
+        )
+
+        self.add_patch(
+            f"{bpath}apply_preserve_sources_list",
+            "mock_apply_preserve_sources_list",
+        )
+
 
         apt_config.handle_apt(cfg, TARGET)
 
@@ -201,8 +210,12 @@ class TestAptSourceConfigSourceList(CiTestCase):
             mirror=orig_primary, security=orig_security,
             release=release, comps=comps)
         orig_content_slash = tmpl.format(
-            mirror=orig_primary + "/", security=orig_security + "/",
-            release=release, comps=comps)
+            mirror=f"{orig_primary}/",
+            security=f"{orig_security}/",
+            release=release,
+            comps=comps,
+        )
+
         expected = tmpl.format(
             mirror=my_primary, security=my_security,
             release=release, comps=comps)

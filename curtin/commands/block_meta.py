@@ -83,10 +83,7 @@ CMD_ARGUMENTS = (
 @logged_time("BLOCK_META")
 def block_meta(args):
     # main entry point for the block-meta command.
-    if args.testmode:
-        state = {}
-    else:
-        state = util.load_command_environment(strict=True)
+    state = {} if args.testmode else util.load_command_environment(strict=True)
     cfg = config.load_command_config(args, state)
     dd_images = util.get_dd_images(cfg.get('sources', {}))
 
@@ -122,7 +119,7 @@ def block_meta(args):
     elif args.mode in (SIMPLE, SIMPLE_BOOT):
         return meta_simple(args)
     else:
-        raise NotImplementedError("mode=%s is not implemented" % args.mode)
+        raise NotImplementedError(f"mode={args.mode} is not implemented")
 
 
 def logtime(msg, func, *args, **kwargs):
@@ -181,7 +178,7 @@ def get_bootpt_cfg(cfg, enabled=False, fstype=None, root_fstype=None):
     def_boot = (platform.machine() in ('aarch64') and
                 not util.is_uefi_bootable())
     ret = {'enabled': def_boot, 'fstype': None, 'label': 'boot'}
-    ret.update(cfg)
+    ret |= cfg
     if enabled:
         ret['enabled'] = True
 
@@ -199,8 +196,7 @@ def get_partition_format_type(cfg, machine=None, uefi_bootable=None):
     if uefi_bootable is None:
         uefi_bootable = util.is_uefi_bootable()
 
-    cfgval = cfg.get('format', None)
-    if cfgval:
+    if cfgval := cfg.get('format', None):
         return cfgval
 
     if uefi_bootable:
@@ -217,7 +213,7 @@ def get_partition_format_type(cfg, machine=None, uefi_bootable=None):
 def devsync(devpath):
     util.subp(['partprobe', devpath], rcs=[0, 1])
     udevadm_settle()
-    for x in range(0, 10):
+    for _ in range(10):
         if os.path.exists(devpath):
             LOG.debug('devsync happy - path %s now exists', devpath)
             return
@@ -243,18 +239,17 @@ def determine_partition_number(partition_id, storage_config):
                         break
                     else:
                         partnumber += 1
-    else:
-        if not partnumber:
-            LOG.warn('partition \'number\' key not set in config:\n%s',
-                     util.json_dumps(vol))
-            partnumber = 1
-            for key, item in storage_config.items():
-                if item.get('type') == "partition" and \
-                        item.get('device') == vol.get('device'):
-                    if item.get('id') == vol.get('id'):
-                        break
-                    else:
-                        partnumber += 1
+    elif not partnumber:
+        LOG.warn('partition \'number\' key not set in config:\n%s',
+                 util.json_dumps(vol))
+        partnumber = 1
+        for key, item in storage_config.items():
+            if item.get('type') == "partition" and \
+                    item.get('device') == vol.get('device'):
+                if item.get('id') == vol.get('id'):
+                    break
+                else:
+                    partnumber += 1
     return partnumber
 
 
@@ -281,14 +276,15 @@ def make_dname_byid(path, error_msg=None, info=None):
     :raises: ValueError if path is not a disk.
     :raises: RuntimeError if there is no serial or wwn.
     """
-    error_msg = str(path) + ("" if not error_msg else " [%s]" % error_msg)
+    error_msg = str(path) + (f" [{error_msg}]" if error_msg else "")
     if info is None:
         info = udevadm_info(path=path)
     devtype = info.get('DEVTYPE')
     if devtype != "disk":
         raise ValueError(
-            "Disk tag udev rules are only for disks, %s has devtype=%s" %
-            (error_msg, devtype))
+            f"Disk tag udev rules are only for disks, {error_msg} has devtype={devtype}"
+        )
+
 
     present = [k for k in DNAME_BYID_KEYS if info.get(k)]
     if not present:
@@ -316,7 +312,7 @@ def make_dname(volume, storage_config):
                 ptuuid = line.split('=')[-1]
                 break
         if vol.get('type') == 'disk':
-            byid = make_dname_byid(path, error_msg="id=%s" % vol.get('id'))
+            byid = make_dname_byid(path, error_msg=f"id={vol.get('id')}")
     # we may not always be able to find a uniq identifier on devices with names
     if (not ptuuid and not byid) and vol.get('type') in ["disk", "partition"]:
         LOG.warning("Can't find a uuid for volume: %s. Skipping dname.",
@@ -365,8 +361,7 @@ def make_dname(volume, storage_config):
         dname = info['DM_NAME']
         matches += [[compose_udev_equality("ENV{DM_NAME}", dname)]]
     else:
-        raise ValueError('cannot make dname for device with type: {}'
-                         .format(vol.get('type')))
+        raise ValueError(f"cannot make dname for device with type: {vol.get('type')}")
 
     # note: this sanitization is done here instead of for all name attributes
     #       at the beginning of storage configuration, as some devices, such as
@@ -391,7 +386,7 @@ def make_dname(volume, storage_config):
                 if 'ENV{DM_UUID}=="mpath' not in env_rule:
                     continue
                 dm_uuid = env_rule.split("==")[1].replace('"', '')
-                part_dm_uuid = 'part*-' + dm_uuid
+                part_dm_uuid = f'part*-{dm_uuid}'
                 part_rule = (
                     [compose_udev_equality('ENV{DEVTYPE}', 'disk')] +
                     [compose_udev_equality('ENV{DM_UUID}', part_dm_uuid)])
@@ -407,7 +402,7 @@ def make_dname(volume, storage_config):
             content.append(', '.join(rule))
 
     util.ensure_dir(rules_dir)
-    rule_file = os.path.join(rules_dir, '{}.rules'.format(sanitized))
+    rule_file = os.path.join(rules_dir, f'{sanitized}.rules')
     util.write_file(rule_file, '\n'.join(content))
 
 
@@ -421,7 +416,7 @@ def get_poolname(info, storage_config):
     elif info.get('type') == 'zpool':
         poolname = info.get('pool')
     else:
-        msg = 'volume is not type zfs or zpool: %s' % info
+        msg = f'volume is not type zfs or zpool: {info}'
         LOG.error(msg)
         raise ValueError(msg)
 
@@ -444,7 +439,7 @@ def get_path_to_storage_volume(volume, storage_config):
         disk_block_path = get_path_to_storage_volume(vol.get('device'),
                                                      storage_config)
         if disk_block_path.startswith('/dev/mapper/mpath'):
-            volume_path = disk_block_path + '-part%s' % partnumber
+            volume_path = disk_block_path + f'-part{partnumber}'
         else:
             disk_kname = block.path_to_kname(disk_block_path)
             partition_kname = block.partition_kname(disk_kname, partnumber)
@@ -558,8 +553,9 @@ def image_handler(info, storage_config, handlers):
         actual_size = os.stat(path).st_size
         if size != actual_size:
             raise RuntimeError(
-                'image at {} was size {} not {} as expected.'.format(
-                    path, actual_size, size))
+                f'image at {path} was size {actual_size} not {size} as expected.'
+            )
+
     else:
         if os.path.exists(path):
             os.unlink(path)
@@ -624,16 +620,14 @@ def dasd_handler(info, storage_config, handlers):
 
         # check post-format to ensure values match
         if dasd_device.needs_formatting(blocksize, disk_layout, label):
-            raise RuntimeError(
-                "Dasd %s failed to format" % dasd_device.devname)
+            raise RuntimeError(f"Dasd {dasd_device.devname} failed to format")
 
 
 def disk_handler(info, storage_config, handlers):
     _dos_names = ['dos', 'msdos']
     ptable = info.get('ptable')
     if ptable and ptable not in PTABLES_VALID:
-        raise ValueError(
-            'Invalid partition table type: %s in %s' % (ptable, info))
+        raise ValueError(f'Invalid partition table type: {ptable} in {info}')
 
     disk = get_path_to_storage_volume(info.get('id'), storage_config)
     # For disks, 'preserve' is what indicates whether the partition
@@ -776,7 +770,7 @@ def calc_partition_info(partition_kname, logical_block_size_bytes):
 def verify_exists(devpath):
     LOG.debug('Verifying %s exists', devpath)
     if not os.path.exists(devpath):
-        raise RuntimeError("Device %s does not exist" % devpath)
+        raise RuntimeError(f"Device {devpath} does not exist")
 
 
 def verify_size(devpath, expected_size_bytes, part_info):
@@ -785,9 +779,8 @@ def verify_size(devpath, expected_size_bytes, part_info):
         found_size_bytes = int(part_info['size']) * 512
     else:
         found_size_bytes = block.read_sys_block_size_bytes(devpath)
-    msg = (
-        'Verifying %s size, expecting %s bytes, found %s bytes' % (
-         devpath, expected_size_bytes, found_size_bytes))
+    msg = f'Verifying {devpath} size, expecting {expected_size_bytes} bytes, found {found_size_bytes} bytes'
+
     LOG.debug(msg)
     if expected_size_bytes != found_size_bytes:
         raise RuntimeError(msg)
@@ -796,8 +789,7 @@ def verify_size(devpath, expected_size_bytes, part_info):
 def verify_ptable_flag(devpath, expected_flag, label, part_info):
     if (expected_flag not in SGDISK_FLAGS.keys()) and (expected_flag not in
                                                        MSDOS_FLAGS.keys()):
-        raise RuntimeError(
-            'Cannot verify unknown partition flag: %s' % expected_flag)
+        raise RuntimeError(f'Cannot verify unknown partition flag: {expected_flag}')
 
     found_flag = None
     if (label in ('dos', 'msdos')):
@@ -812,9 +804,8 @@ def verify_ptable_flag(devpath, expected_flag, label, part_info):
     # gpt and msdos primary partitions look up flag by entry['type']
     if found_flag is None:
         (found_flag, _code) = ptable_uuid_to_flag_entry(part_info['type'])
-    msg = (
-        'Verifying %s partition flag, expecting %s, found %s' % (
-         devpath, expected_flag, found_flag))
+    msg = f'Verifying {devpath} partition flag, expecting {expected_flag}, found {found_flag}'
+
     LOG.debug(msg)
     if expected_flag != found_flag:
         raise RuntimeError(msg)
@@ -824,8 +815,7 @@ def partition_verify_sfdisk(part_action, label, sfdisk_part_info):
     devpath = os.path.realpath(sfdisk_part_info['node'])
     verify_size(
         devpath, int(util.human2bytes(part_action['size'])), sfdisk_part_info)
-    expected_flag = part_action.get('flag')
-    if expected_flag:
+    if expected_flag := part_action.get('flag'):
         verify_ptable_flag(devpath, expected_flag, label, sfdisk_part_info)
 
 
@@ -834,9 +824,8 @@ def partition_verify_fdasd(disk_path, partnumber, info):
     pt = dasd.DasdPartitionTable.from_fdasd(disk_path)
     pt_entry = pt.partitions[partnumber-1]
     expected_tracks = pt.tracks_needed(util.human2bytes(info['size']))
-    msg = (
-        'Verifying %s part %s size, expecting %s tracks, found %s tracks' % (
-         disk_path, partnumber, expected_tracks, pt_entry.length))
+    msg = f'Verifying {disk_path} part {partnumber} size, expecting {expected_tracks} tracks, found {pt_entry.length} tracks'
+
     LOG.debug(msg)
     if expected_tracks != pt_entry.length:
         raise RuntimeError(msg)
@@ -884,8 +873,7 @@ def partition_handler(info, storage_config, handlers):
 
         # In case we fail to find previous partition let's error out now
         if pnum is None:
-            raise RuntimeError(
-                'Cannot find previous partition on disk %s' % disk)
+            raise RuntimeError(f'Cannot find previous partition on disk {disk}')
 
         LOG.debug("previous partition number for '%s' found to be '%s'",
                   info.get('id'), pnum)
@@ -899,25 +887,19 @@ def partition_handler(info, storage_config, handlers):
     if partnumber == 1:
         # start of disk
         offset_sectors = alignment_offset
+    elif disk_ptable == "gpt" or flag != "logical":
+        # msdos primary and any gpt part start after former partition end
+        offset_sectors = previous_start_sectors + previous_size_sectors
     else:
-        # further partitions
-        if disk_ptable == "gpt" or flag != "logical":
-            # msdos primary and any gpt part start after former partition end
-            offset_sectors = previous_start_sectors + previous_size_sectors
-        else:
-            # msdos extended/logical partitions
-            if flag == "logical":
-                if partnumber == 5:
-                    # First logical partition
-                    # start at extended partition start + alignment_offset
-                    offset_sectors = (previous_start_sectors +
-                                      alignment_offset)
-                else:
-                    # Further logical partitions
-                    # start at former logical partition end + alignment_offset
-                    offset_sectors = (previous_start_sectors +
-                                      previous_size_sectors +
-                                      alignment_offset)
+        offset_sectors = (
+            (previous_start_sectors + alignment_offset)
+            if partnumber == 5
+            else (
+                previous_start_sectors
+                + previous_size_sectors
+                + alignment_offset
+            )
+        )
 
     length_bytes = util.human2bytes(size)
     # start sector is part of the sectors that define the partitions size
@@ -981,9 +963,16 @@ def partition_handler(info, storage_config, handlers):
                 partition_type = flag
             else:
                 partition_type = "primary"
-            cmd = ["parted", disk, "--script", "mkpart", partition_type,
-                   "%ss" % offset_sectors, "%ss" % str(offset_sectors +
-                                                       length_sectors)]
+            cmd = [
+                "parted",
+                disk,
+                "--script",
+                "mkpart",
+                partition_type,
+                f"{offset_sectors}s",
+                "%ss" % str(offset_sectors + length_sectors),
+            ]
+
             if flag == 'boot':
                 cmd.extend(['set', str(partnumber), 'boot', 'on'])
 
@@ -993,9 +982,14 @@ def partition_handler(info, storage_config, handlers):
                 typecode = SGDISK_FLAGS[flag]
             else:
                 typecode = SGDISK_FLAGS['linux']
-            cmd = ["sgdisk", "--new", "%s:%s:%s" % (partnumber, offset_sectors,
-                   length_sectors + offset_sectors),
-                   "--typecode=%s:%s" % (partnumber, typecode), disk]
+            cmd = [
+                "sgdisk",
+                "--new",
+                f"{partnumber}:{offset_sectors}:{length_sectors + offset_sectors}",
+                f"--typecode={partnumber}:{typecode}",
+                disk,
+            ]
+
             util.subp(cmd, capture=True)
         elif disk_ptable == "vtoc":
             dasd_pt = dasd.DasdPartitionTable.from_fdasd(disk)
@@ -1007,7 +1001,7 @@ def partition_handler(info, storage_config, handlers):
         if multipath.is_mpath_device(disk):
             udevadm_settle()  # allow partition creation to happen
             # update device mapper table mapping to mpathX-partN
-            part_path = disk + "-part%s" % partnumber
+            part_path = disk + f"-part{partnumber}"
             # sometimes multipath lib creates a block device instead of
             # a udev symlink, remove this and allow kpartx to create it
             if os.path.exists(part_path) and not os.path.islink(part_path):
@@ -1019,12 +1013,8 @@ def partition_handler(info, storage_config, handlers):
             block.rescan_block_devices([disk])
         udevadm_settle(exists=part_path)
 
-    wipe_mode = info.get('wipe')
-    if wipe_mode:
-        if wipe_mode == 'superblock' and create_partition:
-            # partition creation pre-wipes partition superblock locations
-            pass
-        else:
+    if wipe_mode := info.get('wipe'):
+        if wipe_mode != 'superblock' or not create_partition:
             LOG.debug('Wiping partition %s mode=%s', part_path, wipe_mode)
             block.wipe_volume(part_path, mode=wipe_mode, exclusive=False)
 

@@ -155,7 +155,7 @@ def _disable_ipv6_privacy_extensions(target,
         if lines == known_contents:
             LOG.info('Removing ipv6 privacy extension config file: %s', cfg)
             util.del_file(cfg)
-            msg = "removed %s with known contents" % cfg
+            msg = f"removed {cfg} with known contents"
             curtin_contents = '\n'.join(
                 ["# IPv6 Privacy Extensions (RFC 4941)",
                  "# Disabled by curtin",
@@ -169,7 +169,7 @@ def _disable_ipv6_privacy_extensions(target,
             LOG.debug("Expected contents in file %s:\n%s", cfg, known_contents)
             msg = (bmsg + " '%s' exists with user configured content." % cfg)
     except Exception as e:
-        msg = bmsg + " %s exists, but could not be read. %s" % (cfg, e)
+        msg = bmsg + f" {cfg} exists, but could not be read. {e}"
         LOG.exception(msg)
         raise
 
@@ -199,11 +199,11 @@ def _maybe_remove_legacy_eth0(target,
                  if not f.startswith("#")]
         if lines == known_contents:
             util.del_file(cfg)
-            msg = "removed %s with known contents" % cfg
+            msg = f"removed {cfg} with known contents"
         else:
             msg = (bmsg + " '%s' exists with user configured content." % cfg)
     except Exception:
-        msg = bmsg + " %s exists, but could not be read." % cfg
+        msg = bmsg + f" {cfg} exists, but could not be read."
         LOG.exception(msg)
         raise
 

@@ -81,7 +81,7 @@ class TestClearHolders(CiTestCase):
         """ensure that clear_holders.get_dmsetup_uuid works as expected"""
         uuid = "CRYPT-LUKS1-fe335a74374e4649af9776c1699676f8-sdb5_crypt"
         mock_block.sysfs_to_devpath.return_value = self.test_blockdev
-        mock_util.subp.return_value = (' ' + uuid + '\n', None)
+        mock_util.subp.return_value = f' {uuid}' + '\n', None
         res = clear_holders.get_dmsetup_uuid(self.test_syspath)
         mock_util.subp.assert_called_with(
             ['dmsetup', 'info', self.test_blockdev, '-C', '-o',
@@ -118,15 +118,15 @@ class TestClearHolders(CiTestCase):
         """test clear_holders.shutdown_bcache"""
         device = self.test_syspath
         backing_dev = 'backing1'
-        backing_sys = '/sys/class/block/%s' % backing_dev
+        backing_sys = f'/sys/class/block/{backing_dev}'
         m_block.sysfs_to_devpath.return_value = self.test_blockdev
         cset_uuid = str(uuid.uuid4())
 
         def my_sysblock(p, strict=False):
-            return '/sys/class/block/%s' % os.path.basename(p)
+            return f'/sys/class/block/{os.path.basename(p)}'
 
         def my_bsys(p, strict=False):
-            return my_sysblock(p, strict=strict) + '/bcache'
+            return f'{my_sysblock(p, strict=strict)}/bcache'
 
         m_bcache.sysfs_path.side_effect = my_bsys
         m_os.path.join.side_effect = os.path.join
@@ -134,7 +134,7 @@ class TestClearHolders(CiTestCase):
         m_os.path.exists.return_value = True
         m_bcache.get_attached_cacheset.return_value = cset_uuid
         m_block.path_to_kname.return_value = self.test_blockdev
-        m_bcache.get_backing_device.return_value = backing_sys + '/bcache'
+        m_bcache.get_backing_device.return_value = f'{backing_sys}/bcache'
         m_bcache.get_cacheset_members.return_value = []
 
         clear_holders.shutdown_bcache(device)
@@ -182,8 +182,8 @@ class TestClearHolders(CiTestCase):
         lvm_name = b'ubuntu--vg-swap\n'
         vg_name = 'ubuntu-vg'
         lv_name = 'swap'
-        vg_lv_name = "%s/%s" % (vg_name, lv_name)
-        devname = "/dev/" + vg_lv_name
+        vg_lv_name = f"{vg_name}/{lv_name}"
+        devname = f"/dev/{vg_lv_name}"
         pvols = ['/dev/wda1', '/dev/wda2']
         mock_syspath.return_value = self.test_blockdev
         mock_util.load_file.return_value = lvm_name
@@ -191,7 +191,7 @@ class TestClearHolders(CiTestCase):
         mock_lvm.get_lvols_in_volgroup.return_value = ['lvol2']
         clear_holders.shutdown_lvm(self.test_blockdev)
         mock_syspath.assert_called_with(self.test_blockdev)
-        mock_util.load_file.assert_called_with(self.test_blockdev + '/dm/name')
+        mock_util.load_file.assert_called_with(f'{self.test_blockdev}/dm/name')
         mock_zero.assert_called_with(devname, partitions=False)
         mock_lvm.split_lvm_name.assert_called_with(lvm_name.strip())
         self.assertTrue(mock_log.debug.called)
@@ -275,7 +275,7 @@ class TestClearHolders(CiTestCase):
         mock_mdadm.md_get_devices_list.return_value = devices
         mock_mdadm.md_get_spares_list.return_value = spares
         mock_mdadm.mdadm_query_detail.return_value = \
-            {'MD_CONTAINER': '/dev/md/imsm0'}
+                {'MD_CONTAINER': '/dev/md/imsm0'}
 
         clear_holders.shutdown_mdadm(self.test_syspath)
 
@@ -733,7 +733,7 @@ class TestClearHolders(CiTestCase):
     @mock.patch('curtin.block.clear_holders.gen_holders_tree')
     def test_assert_clear(self, mock_gen_holders_tree, mock_syspath, m_ospe):
         def my_sysblock(p, strict=False):
-            return '/sys/class/block/%s' % os.path.basename(p)
+            return f'/sys/class/block/{os.path.basename(p)}'
 
         mock_gen_holders_tree.return_value = self.example_holders_trees[0][0]
         mock_syspath.side_effect = my_sysblock

@@ -27,9 +27,7 @@ class LogHandler(ReportingHandler):
 
     def __init__(self, level="DEBUG"):
         super(LogHandler, self).__init__()
-        if isinstance(level, int):
-            pass
-        else:
+        if not isinstance(level, int):
             input_level = level
             try:
                 level = getattr(logging, level.upper())
@@ -77,16 +75,14 @@ class WebHookHandler(ReportingHandler):
                 url=self.endpoint, data=event.as_dict(),
                 headers=self.headers, retries=self.retries)
         except Exception as e:
-            LOG.warn("failed posting event: %s [%s]" % (event.as_string(), e))
+            LOG.warn(f"failed posting event: {event.as_string()} [{e}]")
 
 
 class JournaldHandler(ReportingHandler):
 
     def __init__(self, level="DEBUG", identifier="curtin_event"):
         super(JournaldHandler, self).__init__()
-        if isinstance(level, int):
-            pass
-        else:
+        if not isinstance(level, int):
             input_level = level
             try:
                 level = getattr(logging, level.upper())
@@ -102,7 +98,7 @@ class JournaldHandler(ReportingHandler):
             from systemd import journal
         except ImportError:
             raise
-        level = str(getattr(journal, "LOG_" + event.level, journal.LOG_DEBUG))
+        level = str(getattr(journal, f"LOG_{event.level}", journal.LOG_DEBUG))
         extra = {}
         if hasattr(event, 'result'):
             extra['CURTIN_RESULT'] = event.result

@@ -162,17 +162,17 @@ class TestPrepareGrubDir(CiTestCase):
         self.add_patch('curtin.commands.install_grub.os.path.exists', 'm_path')
 
     def test_prepare_grub_dir(self):
-        grub_conf = 'etc/default/grub.d/%s' % self.random_string()
+        grub_conf = f'etc/default/grub.d/{self.random_string()}'
         target_grub_conf = os.path.join(self.target, grub_conf)
         ci_conf = os.path.join(
             os.path.dirname(target_grub_conf), '50-cloudimg-settings.cfg')
         self.m_path.return_value = True
         install_grub.prepare_grub_dir(self.target, grub_conf)
         self.m_ensure_dir.assert_called_with(os.path.dirname(target_grub_conf))
-        self.m_move.assert_called_with(ci_conf, ci_conf + '.disabled')
+        self.m_move.assert_called_with(ci_conf, f'{ci_conf}.disabled')
 
     def test_prepare_grub_dir_no_ci_cfg(self):
-        grub_conf = 'etc/default/grub.d/%s' % self.random_string()
+        grub_conf = f'etc/default/grub.d/{self.random_string()}'
         target_grub_conf = os.path.join(self.target, grub_conf)
         self.m_path.return_value = False
         install_grub.prepare_grub_dir(self.target, grub_conf)
@@ -201,8 +201,8 @@ class TestGetCarryoverParams(CiTestCase):
         distroinfo = install_grub.distro.get_distroinfo()
         sep = '--'
         expected_carry_params = ['foo=bar', 'debug=1']
-        cmdline = "root=/dev/xvda1 ro quiet splash %s %s" % (
-            sep, " ".join(expected_carry_params))
+        cmdline = f'root=/dev/xvda1 ro quiet splash {sep} {" ".join(expected_carry_params)}'
+
         self.m_load_file.return_value = cmdline
         self.assertEqual(expected_carry_params,
                          install_grub.get_carryover_params(distroinfo))
@@ -211,8 +211,8 @@ class TestGetCarryoverParams(CiTestCase):
         distroinfo = install_grub.distro.get_distroinfo()
         sep = '---'
         expected_carry_params = ['foo=bar', 'debug=1']
-        cmdline = "root=/dev/xvda1 ro quiet splash %s %s" % (
-            sep, " ".join(expected_carry_params))
+        cmdline = f'root=/dev/xvda1 ro quiet splash {sep} {" ".join(expected_carry_params)}'
+
         self.m_load_file.return_value = cmdline
         self.assertEqual(expected_carry_params,
                          install_grub.get_carryover_params(distroinfo))
@@ -221,7 +221,7 @@ class TestGetCarryoverParams(CiTestCase):
         distroinfo = install_grub.distro.get_distroinfo()
         sep = '---'
         expected_carry_params = ['extra', 'additional']
-        cmdline = "lead=args %s extra %s additional" % (sep, sep)
+        cmdline = f"lead=args {sep} extra {sep} additional"
         self.m_load_file.return_value = cmdline
         self.assertEqual(expected_carry_params,
                          install_grub.get_carryover_params(distroinfo))
@@ -231,8 +231,8 @@ class TestGetCarryoverParams(CiTestCase):
         sep = '---'
         expected_carry_params = ['foo=bar', 'debug=1']
         filtered = ["BOOTIF=eth0", "initrd=initrd-2.3", "BOOT_IMAGE=/xv1"]
-        cmdline = "root=/dev/xvda1 ro quiet splash %s %s" % (
-            sep, " ".join(filtered + expected_carry_params))
+        cmdline = f'root=/dev/xvda1 ro quiet splash {sep} {" ".join(filtered + expected_carry_params)}'
+
         self.m_load_file.return_value = cmdline
         self.assertEqual(expected_carry_params,
                          install_grub.get_carryover_params(distroinfo))
@@ -241,7 +241,7 @@ class TestGetCarryoverParams(CiTestCase):
         distroinfo = install_grub.distro.get_distroinfo()
         sep = '---'
         console = "console=ttyS1,115200"
-        cmdline = "root=/dev/xvda1 ro quiet splash %s %s" % (console, sep)
+        cmdline = f"root=/dev/xvda1 ro quiet splash {console} {sep}"
         self.m_load_file.return_value = cmdline
         self.assertEqual([console],
                          install_grub.get_carryover_params(distroinfo))
@@ -250,8 +250,7 @@ class TestGetCarryoverParams(CiTestCase):
         distroinfo = install_grub.distro.get_distroinfo()
         sep = '---'
         console = "console=ttyS1,115200"
-        cmdline = "root=/dev/xvda1 ro quiet splash %s %s %s" % (
-            console, sep, console)
+        cmdline = f"root=/dev/xvda1 ro quiet splash {console} {sep} {console}"
         self.m_load_file.return_value = cmdline
         self.assertEqual([console],
                          install_grub.get_carryover_params(distroinfo))
@@ -327,9 +326,10 @@ class TestReplaceGrubCmdlineLinuxDefault(CiTestCase):
         m_load_file.return_value = "\n".join(existing)
         new_args = ["foo=bar", "wark=1"]
         newline = 'GRUB_CMDLINE_LINUX_DEFAULT="%s"' % " ".join(new_args)
-        expected = ("\n".join(existing[0:2]) + "\n" +
-                    newline + "\n" +
-                    "\n".join(existing[3:]))
+        expected = (("\n".join(existing[:2]) + "\n" + newline) + "\n") + "\n".join(
+            existing[3:]
+        )
+
 
         install_grub.replace_grub_cmdline_linux_default(
             self.target, new_args)
@@ -350,9 +350,10 @@ class TestReplaceGrubCmdlineLinuxDefault(CiTestCase):
 
         new_args = ["foo=bar", "wark=1"]
         newline = 'GRUB_CMDLINE_LINUX_DEFAULT="%s"' % " ".join(new_args)
-        expected = ("\n".join(existing[0:2]) + "\n" +
-                    newline + "\n" +
-                    "\n".join(existing[3:]))
+        expected = (("\n".join(existing[:2]) + "\n" + newline) + "\n") + "\n".join(
+            existing[3:]
+        )
+
 
         install_grub.replace_grub_cmdline_linux_default(
             self.target, new_args)
@@ -680,10 +681,15 @@ class TestGenUefiInstallCommands(CiTestCase):
             ['efibootmgr', '-v'],
             ['dpkg-reconfigure', grub_name],
             ['update-grub'],
-            [grub_cmd, '--target=%s' % grub_target,
-             '--efi-directory=/boot/efi',
-             '--bootloader-id=%s' % distroinfo.variant, '--recheck'],
+            [
+                grub_cmd,
+                f'--target={grub_target}',
+                '--efi-directory=/boot/efi',
+                f'--bootloader-id={distroinfo.variant}',
+                '--recheck',
+            ],
         ]
+
         expected_post = [['efibootmgr', '-v']]
         self.assertEqual(
             (expected_install, expected_post),
@@ -729,10 +735,15 @@ class TestGenUefiInstallCommands(CiTestCase):
 
         expected_install = [
             ['efibootmgr', '-v'],
-            [grub_cmd, '--target=%s' % grub_target,
-             '--efi-directory=/boot/efi',
-             '--bootloader-id=redhat', '--recheck'],
+            [
+                grub_cmd,
+                f'--target={grub_target}',
+                '--efi-directory=/boot/efi',
+                '--bootloader-id=redhat',
+                '--recheck',
+            ],
         ]
+
         expected_post = [
             ['grub2-mkconfig', '-o', '/boot/grub2/grub.cfg'],
             ['efibootmgr', '-v']
@@ -820,9 +831,10 @@ class TestGenUefiInstallCommands(CiTestCase):
             ['efibootmgr', '-v'],
         ]
         expected_post = [
-            ['grub2-mkconfig', '-o', '/boot/efi/EFI/%s/grub.cfg' % bootid],
-            ['efibootmgr', '-v']
+            ['grub2-mkconfig', '-o', f'/boot/efi/EFI/{bootid}/grub.cfg'],
+            ['efibootmgr', '-v'],
         ]
+
 
         self.assertEqual(
             (expected_install, expected_post),
@@ -900,26 +912,23 @@ class TestInstallGrub(CiTestCase):
     def setUp(self):
         super(TestInstallGrub, self).setUp()
         base = 'curtin.commands.install_grub.'
-        self.add_patch(base + 'distro.get_distroinfo',
-                       'm_distro_get_distroinfo')
-        self.add_patch(base + 'distro.get_architecture',
-                       'm_distro_get_architecture')
-        self.add_patch(base + 'distro.rpm_get_dist_id',
-                       'm_distro_rpm_get_dist_id')
-        self.add_patch(base + 'get_grub_package_name',
-                       'm_get_grub_package_name')
-        self.add_patch(base + 'platform.machine', 'm_platform_machine')
-        self.add_patch(base + 'get_grub_config_file', 'm_get_grub_config_file')
-        self.add_patch(base + 'get_carryover_params', 'm_get_carryover_params')
-        self.add_patch(base + 'prepare_grub_dir', 'm_prepare_grub_dir')
-        self.add_patch(base + 'write_grub_config', 'm_write_grub_config')
-        self.add_patch(base + 'get_grub_install_command',
-                       'm_get_grub_install_command')
-        self.add_patch(base + 'gen_uefi_install_commands',
-                       'm_gen_uefi_install_commands')
-        self.add_patch(base + 'gen_install_commands', 'm_gen_install_commands')
-        self.add_patch(base + 'util.subp', 'm_subp')
-        self.add_patch(base + 'os.environ.copy', 'm_environ')
+        self.add_patch(f'{base}distro.get_distroinfo', 'm_distro_get_distroinfo')
+        self.add_patch(f'{base}distro.get_architecture', 'm_distro_get_architecture')
+        self.add_patch(f'{base}distro.rpm_get_dist_id', 'm_distro_rpm_get_dist_id')
+        self.add_patch(f'{base}get_grub_package_name', 'm_get_grub_package_name')
+        self.add_patch(f'{base}platform.machine', 'm_platform_machine')
+        self.add_patch(f'{base}get_grub_config_file', 'm_get_grub_config_file')
+        self.add_patch(f'{base}get_carryover_params', 'm_get_carryover_params')
+        self.add_patch(f'{base}prepare_grub_dir', 'm_prepare_grub_dir')
+        self.add_patch(f'{base}write_grub_config', 'm_write_grub_config')
+        self.add_patch(f'{base}get_grub_install_command', 'm_get_grub_install_command')
+        self.add_patch(
+            f'{base}gen_uefi_install_commands', 'm_gen_uefi_install_commands'
+        )
+
+        self.add_patch(f'{base}gen_install_commands', 'm_gen_install_commands')
+        self.add_patch(f'{base}util.subp', 'm_subp')
+        self.add_patch(f'{base}os.environ.copy', 'm_environ')
 
         self.distroinfo = distro.DistroInfo('ubuntu', 'debian')
         self.m_distro_get_distroinfo.return_value = self.distroinfo

@@ -41,9 +41,7 @@ def tar_xattr_opts(cmd=None):
 
     (out, _err) = util.subp(cmd + ['--help'], capture=True)
 
-    if "xattr" in out:
-        return ['--xattrs', '--xattrs-include=*']
-    return []
+    return ['--xattrs', '--xattrs-include=*'] if "xattr" in out else []
 
 
 def extract_root_tgz_url(url, target):
@@ -123,8 +121,7 @@ class LayeredSourceHandler(AbstractSourceHandler):
                         ("Failed to use fsimage: '%s' doesn't exist " +
                          "or is invalid") % (img,))
             for img in self.image_stack:
-                mp = os.path.join(
-                    self._tmpdir, os.path.basename(img) + ".dir")
+                mp = os.path.join(self._tmpdir, f"{os.path.basename(img)}.dir")
                 os.mkdir(mp)
                 mount(img, mp, options='loop,ro')
                 self._mounts.append(mp)
@@ -171,7 +168,6 @@ def _get_image_stack(uri):
     return: tuple of path to dependent images
     '''
 
-    image_stack = []
     img_name = os.path.basename(uri)
     root_dir = uri[:-len(img_name)]
     img_base, img_ext = os.path.splitext(img_name)
@@ -180,11 +176,10 @@ def _get_image_stack(uri):
         return []
 
     img_parts = img_base.split('.')
-    for i in range(len(img_parts)):
-        image_stack.append(
-            root_dir + '.'.join(img_parts[0:i+1]) + img_ext)
-
-    return image_stack
+    return [
+        root_dir + '.'.join(img_parts[: i + 1]) + img_ext
+        for i in range(len(img_parts))
+    ]
 
 
 def get_handler_for_source(source):
@@ -245,14 +240,11 @@ def extract(args):
 
     sources = [util.sanitize_source(s) for s in sources]
 
-    LOG.debug("Installing sources: %s to target at %s" % (sources, target))
+    LOG.debug(f"Installing sources: {sources} to target at {target}")
     stack_prefix = state.get('report_stack_prefix', '')
 
     for source in sources:
-        with events.ReportEventStack(
-                name=stack_prefix, reporting_enabled=True, level="INFO",
-                description="acquiring and extracting image from %s" %
-                source['uri']):
+        with events.ReportEventStack(name=stack_prefix, reporting_enabled=True, level="INFO", description=f"acquiring and extracting image from {source['uri']}"):
             if source['type'].startswith('dd-'):
                 continue
             extract_source(source, target)

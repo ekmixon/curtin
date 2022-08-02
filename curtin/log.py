@@ -63,8 +63,13 @@ if not logging.getLogger().handlers:
 def _repr_call(name, *args, **kwargs):
     return "%s(%s)" % (
         name,
-        ', '.join([str(repr(a)) for a in args] +
-                  ["%s=%s" % (k, repr(v)) for k, v in kwargs.items()]))
+        ', '.join(
+            (
+                [repr(a) for a in args]
+                + [f"{k}={repr(v)}" for k, v in kwargs.items()]
+            )
+        ),
+    )
 
 
 def log_call(func, *args, **kwargs):
@@ -78,7 +83,7 @@ def log_time(msg, func, *args, **kwargs):
     try:
         return func(*args, **kwargs)
     finally:
-        LOG.debug(msg + "%.3f", (time.time() - start))
+        LOG.debug(f"{msg}%.3f", time.time() - start)
 
 
 def logged_call():
@@ -94,8 +99,10 @@ def logged_time(msg):
     def decorator(func):
         @wraps(func)
         def wrapper(*args, **kwargs):
-            return log_time("TIMED %s: " % msg, func, *args, **kwargs)
+            return log_time(f"TIMED {msg}: ", func, *args, **kwargs)
+
         return wrapper
+
     return decorator
 
 

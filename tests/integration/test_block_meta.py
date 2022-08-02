@@ -58,10 +58,11 @@ class StorageConfigBuilder:
     def add_image(self, *, path, size, create=False, **kw):
         action = {
             'type': 'image',
-            'id': 'id' + str(len(self.config)),
+            'id': f'id{len(self.config)}',
             'path': path,
             'size': size,
-            }
+        }
+
         action.update(**kw)
         self.cur_image = action['id']
         self.config.append(action)
@@ -75,10 +76,11 @@ class StorageConfigBuilder:
             raise Exception("no current image")
         action = {
             'type': 'partition',
-            'id': 'id' + str(len(self.config)),
+            'id': f'id{len(self.config)}',
             'device': self.cur_image,
             'size': size,
-            }
+        }
+
         action.update(**kw)
         self.config.append(action)
         return action
@@ -240,7 +242,7 @@ class TestBlockMeta(IntegrationTestCase):
                 ])
 
             p1kname = block.partition_kname(block.path_to_kname(dev), 1)
-            self.assertTrue(block.is_extended_partition('/dev/' + p1kname))
+            self.assertTrue(block.is_extended_partition(f'/dev/{p1kname}'))
 
     def test_logical_v1(self):
         self._test_logical(1)
@@ -394,11 +396,12 @@ class TestBlockMeta(IntegrationTestCase):
             sources = {
                 'sources': {
                     '00': {
-                        'uri': server.base_url + '/static/lvm-disk.dd',
+                        'uri': f'{server.base_url}/static/lvm-disk.dd',
                         'type': 'dd-raw',
-                    },
-                },
+                    }
+                }
             }
+
             curtin_cfg.update(**sources)
             mnt_point = self.tmp_dir()
             cmd_env = {

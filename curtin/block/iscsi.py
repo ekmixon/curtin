@@ -36,25 +36,26 @@ ISCSI_PORTAL_REGEX = re.compile(r'^(?P<host>\S*):(?P<port>\d+)$')
 # @portal is of the form: HOST:PORT
 def assert_valid_iscsi_portal(portal):
     if not isinstance(portal, util.string_types):
-        raise ValueError("iSCSI portal (%s) is not a string" % portal)
+        raise ValueError(f"iSCSI portal ({portal}) is not a string")
 
     m = re.match(ISCSI_PORTAL_REGEX, portal)
     if m is None:
         raise ValueError("iSCSI portal (%s) is not in the format "
                          "(HOST:PORT)" % portal)
 
-    host = m.group('host')
+    host = m['host']
     if host.startswith('[') and host.endswith(']'):
         host = host[1:-1]
         if not util.is_valid_ipv6_address(host):
-            raise ValueError("Invalid IPv6 address (%s) in iSCSI portal (%s)" %
-                             (host, portal))
+            raise ValueError(f"Invalid IPv6 address ({host}) in iSCSI portal ({portal})")
 
     try:
-        port = int(m.group('port'))
+        port = int(m['port'])
     except ValueError:
-        raise ValueError("iSCSI portal (%s) port (%s) is not an integer" %
-                         (portal, m.group('port')))
+        raise ValueError(
+            f"iSCSI portal ({portal}) port ({m['port']}) is not an integer"
+        )
+
 
     return host, port
 
@@ -74,8 +75,7 @@ def iscsiadm_discovery(portal):
     if not portal:
         raise ValueError("Portal must be specified for discovery")
 
-    cmd = ["iscsiadm", "--mode=discovery", "--type=%s" % type,
-           "--portal=%s" % portal]
+    cmd = ["iscsiadm", "--mode=discovery", f"--type={type}", f"--portal={portal}"]
 
     try:
         util.subp(cmd, capture=True, log_captured=True)
@@ -88,17 +88,30 @@ def iscsiadm_discovery(portal):
 def iscsiadm_login(target, portal):
     LOG.debug('iscsiadm_login: target=%s portal=%s', target, portal)
 
-    cmd = ['iscsiadm', '--mode=node', '--targetname=%s' % target,
-           '--portal=%s' % portal, '--login']
+    cmd = [
+        'iscsiadm',
+        '--mode=node',
+        f'--targetname={target}',
+        f'--portal={portal}',
+        '--login',
+    ]
+
     util.subp(cmd, capture=True, log_captured=True)
 
 
 def iscsiadm_set_automatic(target, portal):
     LOG.debug('iscsiadm_set_automatic: target=%s portal=%s', target, portal)
 
-    cmd = ['iscsiadm', '--mode=node', '--targetname=%s' % target,
-           '--portal=%s' % portal, '--op=update',
-           '--name=node.startup', '--value=automatic']
+    cmd = [
+        'iscsiadm',
+        '--mode=node',
+        f'--targetname={target}',
+        f'--portal={portal}',
+        '--op=update',
+        '--name=node.startup',
+        '--value=automatic',
+    ]
+
 
     util.subp(cmd, capture=True, log_captured=True)
 
@@ -111,59 +124,103 @@ def iscsiadm_authenticate(target, portal, user=None, password=None,
               iuser, "HIDDEN" if ipassword else None)
 
     if iuser or ipassword:
-        cmd = ['iscsiadm', '--mode=node', '--targetname=%s' % target,
-               '--portal=%s' % portal, '--op=update',
-               '--name=node.session.auth.authmethod', '--value=CHAP']
+        cmd = [
+            'iscsiadm',
+            '--mode=node',
+            f'--targetname={target}',
+            f'--portal={portal}',
+            '--op=update',
+            '--name=node.session.auth.authmethod',
+            '--value=CHAP',
+        ]
+
         util.subp(cmd, capture=True, log_captured=True)
 
-        if iuser:
-            cmd = ['iscsiadm', '--mode=node', '--targetname=%s' % target,
-                   '--portal=%s' % portal, '--op=update',
-                   '--name=node.session.auth.username_in',
-                   '--value=%s' % iuser]
-            util.subp(cmd, capture=True, log_captured=True)
+    if iuser:
+        cmd = [
+            'iscsiadm',
+            '--mode=node',
+            f'--targetname={target}',
+            f'--portal={portal}',
+            '--op=update',
+            '--name=node.session.auth.username_in',
+            f'--value={iuser}',
+        ]
 
-        if ipassword:
-            cmd = ['iscsiadm', '--mode=node', '--targetname=%s' % target,
-                   '--portal=%s' % portal, '--op=update',
-                   '--name=node.session.auth.password_in',
-                   '--value=%s' % ipassword]
-            util.subp(cmd, capture=True, log_captured=True,
-                      logstring='iscsiadm --mode=node --targetname=%s '
-                                '--portal=%s --op=update '
-                                '--name=node.session.auth.password_in '
-                                '--value=HIDDEN' % (target, portal))
+        util.subp(cmd, capture=True, log_captured=True)
+
+    if ipassword:
+        cmd = [
+            'iscsiadm',
+            '--mode=node',
+            f'--targetname={target}',
+            f'--portal={portal}',
+            '--op=update',
+            '--name=node.session.auth.password_in',
+            f'--value={ipassword}',
+        ]
+
+        util.subp(cmd, capture=True, log_captured=True,
+                  logstring='iscsiadm --mode=node --targetname=%s '
+                            '--portal=%s --op=update '
+                            '--name=node.session.auth.password_in '
+                            '--value=HIDDEN' % (target, portal))
 
     if user or password:
-        cmd = ['iscsiadm', '--mode=node', '--targetname=%s' % target,
-               '--portal=%s' % portal, '--op=update',
-               '--name=node.session.auth.authmethod', '--value=CHAP']
+        cmd = [
+            'iscsiadm',
+            '--mode=node',
+            f'--targetname={target}',
+            f'--portal={portal}',
+            '--op=update',
+            '--name=node.session.auth.authmethod',
+            '--value=CHAP',
+        ]
+
         util.subp(cmd, capture=True, log_captured=True)
 
-        if user:
-            cmd = ['iscsiadm', '--mode=node', '--targetname=%s' % target,
-                   '--portal=%s' % portal, '--op=update',
-                   '--name=node.session.auth.username',
-                   '--value=%s' % user]
-            util.subp(cmd, capture=True, log_captured=True)
+    if user:
+        cmd = [
+            'iscsiadm',
+            '--mode=node',
+            f'--targetname={target}',
+            f'--portal={portal}',
+            '--op=update',
+            '--name=node.session.auth.username',
+            f'--value={user}',
+        ]
 
-        if password:
-            cmd = ['iscsiadm', '--mode=node', '--targetname=%s' % target,
-                   '--portal=%s' % portal, '--op=update',
-                   '--name=node.session.auth.password',
-                   '--value=%s' % password]
-            util.subp(cmd, capture=True, log_captured=True,
-                      logstring='iscsiadm --mode=node --targetname=%s '
-                                '--portal=%s --op=update '
-                                '--name=node.session.auth.password '
-                                '--value=HIDDEN' % (target, portal))
+        util.subp(cmd, capture=True, log_captured=True)
+
+    if password:
+        cmd = [
+            'iscsiadm',
+            '--mode=node',
+            f'--targetname={target}',
+            f'--portal={portal}',
+            '--op=update',
+            '--name=node.session.auth.password',
+            f'--value={password}',
+        ]
+
+        util.subp(cmd, capture=True, log_captured=True,
+                  logstring='iscsiadm --mode=node --targetname=%s '
+                            '--portal=%s --op=update '
+                            '--name=node.session.auth.password '
+                            '--value=HIDDEN' % (target, portal))
 
 
 def iscsiadm_logout(target, portal):
     LOG.debug('iscsiadm_logout: target=%s portal=%s', target, portal)
 
-    cmd = ['iscsiadm', '--mode=node', '--targetname=%s' % target,
-           '--portal=%s' % portal, '--logout']
+    cmd = [
+        'iscsiadm',
+        '--mode=node',
+        f'--targetname={target}',
+        f'--portal={portal}',
+        '--logout',
+    ]
+
     util.subp(cmd, capture=True, log_captured=True)
 
     udev.udevadm_settle()
@@ -209,7 +266,7 @@ def ensure_disk_connected(rfc4173, write_config=True):
         try:
             iscsi_disk.connect()
         except util.ProcessExecutionError:
-            LOG.error('Unable to connect to iSCSI disk (%s)' % rfc4173)
+            LOG.error(f'Unable to connect to iSCSI disk ({rfc4173})')
             # what should we do in this case?
             raise
         if write_config:
@@ -262,7 +319,7 @@ def get_iscsi_disks_from_config(cfg):
 
 def get_iscsi_ports_from_config(cfg):
     """Return a set of ports that may be used when connecting to volumes."""
-    ports = set([d.port for d in get_iscsi_disks_from_config(cfg)])
+    ports = {d.port for d in get_iscsi_disks_from_config(cfg)}
     LOG.debug('Found iscsi ports in use: %s', ports)
     return ports
 
@@ -281,7 +338,7 @@ def disconnect_target_disks(target_root_path=None):
                 host, port, _ = conn.split(',')
                 try:
                     util.subp(['sync'])
-                    iscsiadm_logout(target, '%s:%s' % (host, port))
+                    iscsiadm_logout(target, f'{host}:{port}')
                 except util.ProcessExecutionError as e:
                     fails.append(target)
                     LOG.warn("Unable to logout of iSCSI target %s: %s",
@@ -290,8 +347,7 @@ def disconnect_target_disks(target_root_path=None):
         LOG.warning('Skipping disconnect: failed to find iscsi nodes path: %s',
                     target_nodes_path)
     if fails:
-        raise RuntimeError(
-            "Unable to logout of iSCSI targets: %s" % ', '.join(fails))
+        raise RuntimeError(f"Unable to logout of iSCSI targets: {', '.join(fails)}")
 
 
 # Determines if a /dev/disk/by-path symlink matching the udev pattern
@@ -305,7 +361,7 @@ def kname_is_iscsi(kname):
                 LOG.debug('kname_is_iscsi: '
                           'found by-path link %s for kname %s', path, kname)
                 return True
-    LOG.debug('kname_is_iscsi: no iscsi disk found for kname %s' % kname)
+    LOG.debug(f'kname_is_iscsi: no iscsi disk found for kname {kname}')
     return False
 
 
@@ -323,7 +379,7 @@ def volpath_is_iscsi(volume_path):
     LOG.debug('volume_path=%s found slaves: %s', volume_path,
               volume_path_slaves)
     knames = [path_to_kname(volume_path)] + volume_path_slaves
-    return any([kname_is_iscsi(kname) for kname in knames])
+    return any(kname_is_iscsi(kname) for kname in knames)
 
 
 class IscsiDisk(object):
@@ -395,41 +451,40 @@ class IscsiDisk(object):
 
         try:
             self.port = int(target_m.group('port')) if target_m.group('port') \
-                 else 3260
+                     else 3260
 
         except ValueError:
-            raise ValueError('Specified iSCSI port (%s) is not an integer' %
-                             target_m.group('port'))
+            raise ValueError(
+                f"Specified iSCSI port ({target_m.group('port')}) is not an integer"
+            )
 
-        portal = '%s:%s' % (self.host, self.port)
+
+        portal = f'{self.host}:{self.port}'
         if self.host.startswith('[') and self.host.endswith(']'):
             self.host = self.host[1:-1]
             if not util.is_valid_ipv6_address(self.host):
                 raise ValueError('Specified iSCSI IPv6 address (%s) is not '
                                  'valid' % self.host)
-            portal = '[%s]:%s' % (self.host, self.port)
+            portal = f'[{self.host}]:{self.port}'
         assert_valid_iscsi_portal(portal)
         self.portal = portal
 
     def __str__(self):
         rep = 'iscsi'
         if self.user:
-            rep += ':%s:PASSWORD' % self.user
+            rep += f':{self.user}:PASSWORD'
         if self.iuser:
-            rep += ':%s:IPASSWORD' % self.iuser
-        rep += ':%s:%s:%s:%s:%s' % (self.host, self.proto, self.port,
-                                    self.lun, self.target)
+            rep += f':{self.iuser}:IPASSWORD'
+        rep += f':{self.host}:{self.proto}:{self.port}:{self.lun}:{self.target}'
         return rep
 
     @property
     def etciscsi_nodefile(self):
-        return '/etc/iscsi/nodes/%s/%s,%s,%s/default' % (
-            self.target, self.host, self.port, self.lun)
+        return f'/etc/iscsi/nodes/{self.target}/{self.host},{self.port},{self.lun}/default'
 
     @property
     def devdisk_path(self):
-        return '/dev/disk/by-path/ip-%s-iscsi-%s-lun-%s' % (
-            self.portal, self.target, self.lun)
+        return f'/dev/disk/by-path/ip-{self.portal}-iscsi-{self.target}-lun-{self.lun}'
 
     def connect(self):
         if self.target not in iscsiadm_sessions():

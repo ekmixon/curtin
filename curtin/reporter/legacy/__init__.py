@@ -47,16 +47,14 @@ def load_reporter(config):
         LOG.info("'reporter' not found in config file.")
         return EmptyReporter()
     name, options = reporter.popitem()
-    module = try_import_module('curtin.reporter.legacy.%s' % name)
+    module = try_import_module(f'curtin.reporter.legacy.{name}')
     if module is None:
-        LOG.error(
-            "Module for %s reporter could not load." % name)
+        LOG.error(f"Module for {name} reporter could not load.")
         return EmptyReporter()
     try:
         return module.load_factory(options)
     except LoadReporterException:
-        LOG.error(
-            "Failed loading %s reporter with %s" % (name, options))
+        LOG.error(f"Failed loading {name} reporter with {options}")
         return EmptyReporter()
 
 # vi: ts=4 expandtab syntax=python
